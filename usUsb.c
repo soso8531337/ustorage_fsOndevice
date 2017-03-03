@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include "usUsb.h"
 #include "usSys.h"
+#include "usError.h"
 
 /*
 *osPriv is reserved

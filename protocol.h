@@ -38,7 +38,7 @@ struct uStorPro_headInfo{
 	int32_t promagic;	/*device support protocol magic*/
 	int16_t version; /*protocol version*/
 	int16_t relag;	/*Response Code*/	
-	char reserved[12]; /*reserved for extend*/
+	char reserved[8]; /*reserved for extend*/
 }__attribute__((__packed__));
 
 typedef struct acessory_parameter
@@ -214,6 +214,7 @@ struct operation_diskInfo{
 struct operation_rw{
 	int64_t  offset; /*Offset Read/Write Operation*/
 	int32_t  size;	/*Read/Write size*/
+	int16_t	 pathlen;
 	char     abspath[]; /*Filename path length is 4096*/
 }__attribute__((__packed__));
 

@@ -458,37 +458,6 @@ int disk_mnt_disktag_parse(disk_info_t *pdisk)
 
 int disk_aciton_notify_upnp(disk_partinfo_t *part, int action, char *dev)
 {
-	int fd;
-	event_block event;
-	
-
-	DISKCK_DBG("Notify Init IPC begin[%ld]\n", time(NULL));
-	//fd = ipc_client_init(UPNPD_EVENT_IPC);
-	fd = ipc_nonblock_client_init(UPNPD_EVENT_IPC, 5);
-	DISKCK_DBG("Notify Init IPC end[%ld]\n", time(NULL));
-	if(fd < 0){
-		DISKCK_DBG("Error\n");
-		return DISK_FAILURE;
-	}
-	memset(&event, 0, sizeof(event_block));
-	if(action == DISK_UDEV_ADD){
-		strcpy(event.action, "add");
-	}else if(action == DISK_UDEV_REMOVE){
-		strcpy(event.action, "remove");
-	}else{
-		DISKCK_DBG("Unknown Inotify Aciton=%d\n", action);
-		close(fd);
-		return DISK_FAILURE;
-	}
-	strcpy(event.type,  dev);
-	event.partnum = atoi(part->info.devname+strlen(dev));
-	
-	DISKCK_DBG("Notify To UPNPD begin[%ld]: %s%d %s\n", time(NULL), event.type, event.partnum, event.action);
-	ipc_write(fd, (char*)&event, sizeof(event_block));
-	DISKCK_DBG("Notify To UPNPD end[%ld]: %s%d %s\n", time(NULL), event.type, event.partnum, event.action);
-
-	close(fd);
-
 	return DISK_SUCCESS;
 }
 
@@ -526,17 +495,7 @@ int disk_check_smb_user_onoff(char *config)
 
 void disk_excute_factory_script(char *basepath)
 {
-	char cmdbuf[DMAX_STR] = {0};
-	
-	if(basepath == NULL){
-		return;
-	}
-	snprintf(cmdbuf, DMAX_STR-1, "%s/%s", basepath, SCRIPT_NAME);
-	if(access(cmdbuf, F_OK)){
-		return;
-	}
-	exec_cmd("chmod 755 %s", cmdbuf);
-	exec_cmd(cmdbuf);
+	return ;
 }
 
 int disk_dirlist_display_name(char *preffix, char *before, char *after)
@@ -1521,7 +1480,7 @@ int udev_action_func_remove(disk_info_t *pdisk, udev_action *action)
 
 	list_for_each_entry_safe(node, _node, &(pdisk->list), node) {
 		if(strcmp(node->info.devname, action->dev) == 0&&
-			(action->major== 0xFFFF){
+			(action->major== 0xFFFF)){
 			if(node->status == action->action){
 				DISKCK_DBG("Disk %s Have %s\n", node->info.devname, 
 					action->action==DISK_UDEV_REMOVE?"Removed":"Safe Removed");

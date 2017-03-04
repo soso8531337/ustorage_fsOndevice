@@ -15,11 +15,11 @@ void log_debug(FILE *fp, char *fname, const char *func, int lineno, char *fmt, .
 {
 
 	va_list ap;
-	pid_t pid;
+	pthread_t pid;
 	time_t t;
 	struct tm *tm, tmptm={0};
 	
-	pid = getpid();
+	pid = pthread_self();
 
 	t = time(NULL);
 	localtime_r(&t, &tmptm);

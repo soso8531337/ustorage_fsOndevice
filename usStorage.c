@@ -297,7 +297,7 @@ int main(int argc, char **argv)
 	uint32_t truRecvSize;	
 	struct usEventArg eventarg;
 	
-	DEBUG("uStorage Filesystem on Device Running[%s %s].\r\n", __DATE__, __TIME__);
+	DEBUG("uStorage Filesystem on Device Running[%s %s].\n", __DATE__, __TIME__);
 
 	if(argc <= 1){
 		daemonize();
@@ -329,7 +329,8 @@ int main(int argc, char **argv)
 				usleep(200000);
 				continue;
 			}	
-		}else if(conState == CON_CNTING){		
+		}
+		if(conState == CON_CNTING){		
 			/*Connect Phone Device*/
 			if(usProtocol_ConnectPhone(&(usContext.phone)) == EUSTOR_OK){				
 				conState = CON_CNTED;

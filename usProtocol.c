@@ -219,12 +219,12 @@ static int32_t itunes_InterMemSendPacket(mux_itunes *iosDev, enum mux_protocol p
 	if (iosDev->version >= 2) {
 		mhdr->magic = htonl(0xfeedface);
 		if (proto == MUX_PROTO_SETUP) {
-			iosDev->tx_seq = 0;
-			iosDev->rx_seq = 0xFFFF;
+			iosDev->itx_seq = 0;
+			iosDev->irx_seq = 0xFFFF;
 		}
-		mhdr->tx_seq = htons(iosDev->tx_seq);
-		mhdr->rx_seq = htons(iosDev->rx_seq);
-		iosDev->tx_seq++;
+		mhdr->tx_seq = htons(iosDev->itx_seq);
+		mhdr->rx_seq = htons(iosDev->irx_seq);
+		iosDev->itx_seq++;
 	}
 	memcpy(iosDev->interBuf+ mux_header_size, header, hdrlen);
 	if(data && length)
@@ -393,6 +393,7 @@ static int32_t itunes_SendTCP(mux_itunes *iosDev, uint8_t flags,
 	}
 	/*Set tcp header*/
 	th = (struct tcphdr *)(ptrpay+ mux_header_size);
+	memset(th, 0, sizeof(struct tcphdr));
 	th->th_sport = htons(iosDev->sport);
 	th->th_dport = htons(iosDev->dport);
 	th->th_seq = htonl(iosDev->tx_seq);
@@ -425,6 +426,7 @@ static int32_t itunes_SendTCP(mux_itunes *iosDev, uint8_t flags,
 							total, trueSend, res);
 		return res;
 	}
+	iosDev->tx_acked = iosDev->tx_ack;
 	if(total && total % 512 == 0){
 		DEBUG("Send ZLP.....\n");
 		 usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
@@ -828,6 +830,8 @@ static int32_t itunes_RecvProPackage(mux_itunes *iosDev, uint8_t* buffer,
 		itunes_SendTCP(iosDev, TH_ACK, ackbuf, NULL, 0);
 		memcpy(buffer, payload, payload_length);
 	}
+	iosDev->tx_ack += payload_length;
+	
 	*rsize = payload_length;
 	
 	DEBUG("Receive IOS Package Finish-->buffer:%p Recvsize:%d\n", buffer, *rsize);

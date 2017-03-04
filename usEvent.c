@@ -89,7 +89,7 @@ static int32_t initNetlinkSock(void)
 	/*Triger phone*/
 	if((dev_fd = open(PHONE_BUS_LOC, O_WRONLY)) < 0 ||
 			write(dev_fd, "add", 3) <= 0){
-		DEBUG("Write Failed[%s]...\r\n", strerror(errno));
+		DEBUG("Write Failed[%s]...\n", strerror(errno));
 	}
 	close(dev_fd);
 	
@@ -120,7 +120,7 @@ static struct udevd_uevent_msg *get_msg_from_envbuf(const char *buf, int buf_siz
 		keylen = strlen(key);
 		msg->envp[i] = key;
 		bufpos += keylen + 1;
-		DEBUG( "add '%s' to msg.envp[%i]\r\n", msg->envp[i], i);
+	//	DEBUG( "add '%s' to msg.envp[%i]\r\n", msg->envp[i], i);
 
 		/* remember some keys for further processing */
 		if (strncmp(key, "ACTION=", 7) == 0)
@@ -368,8 +368,14 @@ void* vs_eventFunc(void *pvParameters)
 
 int32_t usEvent_init(struct usEventArg *evarg)
 {
+	pthread_t eventThread;
+
 	if(evarg){
 		memcpy(&eventConf, evarg, sizeof(struct usEventArg));
+	}
+
+	if (pthread_create(&eventThread, NULL, vs_eventFunc, NULL) != 0) {
+		DEBUG("ERROR: Could not start Event Thread[%s]\n", strerror(errno));
 	}
 
 	return EUSTOR_OK;

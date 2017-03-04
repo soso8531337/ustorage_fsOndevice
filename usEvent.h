@@ -14,13 +14,14 @@
 #endif
 
 typedef void (*eventDiskCall)(int);
-typedef void (*eventPhoneCall)(int, char *,);
+typedef void (*eventPhoneCall)(int, char *);
 
 struct usEventArg{
 	eventDiskCall phoneCall;
 	eventPhoneCall eventPhoneCall;
 };
 
+int32_t usEvent_init(struct usEventArg *evarg);
 
 #ifdef __cplusplus
 }

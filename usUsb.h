@@ -179,20 +179,20 @@ typedef struct  {
 	void *osPriv;
 }usbInfo;
 
-uint8_t usUsb_Init(void *osPriv);
-uint8_t usUsb_releaseInterface(usbInfo *usbDev);
+int32_t usUsb_Init(void *osPriv);
+int32_t usUsb_releaseInterface(usbInfo *usbDev);
 
-uint8_t usUsb_SendControlRequest(void *osPriv, 
+int32_t usUsb_SendControlRequest(void *osPriv, 
 			uint8_t bmRequestType, uint8_t bRequest, 
 			uint16_t wValue, uint16_t wIndex, uint16_t wLength,  void * data);
-uint8_t usUsb_GetDeviceDescriptor(void *osPriv, USB_StdDesDevice_t *usbDeviceDescriptor);
+int32_t usUsb_GetDeviceDescriptor(void *osPriv, USB_StdDesDevice_t *usbDeviceDescriptor);
 
-uint8_t usUsb_SetDeviceConfigDescriptor(void *osPriv, uint8_t cfgindex);
+int32_t usUsb_SetDeviceConfigDescriptor(void *osPriv, uint8_t cfgindex);
 
-uint8_t usUsb_BlukPacketReceive(usbInfo *usbDev, uint8_t *buffer, 
+int32_t usUsb_BlukPacketReceive(usbInfo *usbDev, uint8_t *buffer, 
 							uint32_t length, uint32_t *aLength, int timeout);
 
-uint8_t usUsb_BlukPacketSend(usbInfo *usbDev, uint8_t *buffer, 
+int32_t usUsb_BlukPacketSend(usbInfo *usbDev, uint8_t *buffer, 
 							uint32_t length, uint32_t *aLength, int timeout);
 
 void usUsb_Print(uint8_t *buffer, int length);

@@ -18,6 +18,7 @@
 #include "usUsb.h"
 #include "usSys.h"
 #include "protocol.h"
+#include "usError.h"
 
 /*****************************************************************************
  * Private types/enumerations/variables
@@ -97,7 +98,6 @@ typedef enum{
 
 
 #define PACKAGE_TIMEOUT		5000			/*send or receive package timeout*/
-#define IOS_INTERBUF_SIZE	(48*1024)
 
 #ifndef IPPROTO_TCP
 #define IPPROTO_TCP 		6
@@ -147,30 +147,6 @@ struct mux_header
 	uint16_t rx_seq;
 };
 
-typedef struct{
-	uint8_t version; /*Protocol version*/
-	uint16_t irx_seq; /*itunes protocol rx seq*/
-	uint16_t itx_seq;	/*itunes protocol tx seq*/
-	/*tcp connection information*/
-	uint16_t sport, dport;
-	uint32_t tx_seq, tx_ack, tx_acked, tx_win;
-	uint32_t rx_seq, rx_recvd, rx_ack, rx_win;
-	int flags;	
-	usbInfo usbIOS;
-	uint8_t interBuf[IOS_INTERBUF_SIZE]; /*Internel buffer, used for small data send/receive*/
-}mux_itunes;
-
-
-typedef struct {
-	uint8_t phoneType;	/*Android or IOS*/
-	union{
-		mux_itunes phoneIOS;
-		usbInfo phoneAndroid;
-	}phoneInfo;
-	
-}usPhoneinfo;
-
-
 static usConfig globalConf = {
 	.aoaConf = {
 		.manufacturer = "i4season",
@@ -179,8 +155,8 @@ static usConfig globalConf = {
 		.version = "1.0",
 		.url = "https://www.simicloud.com/download/index.html",
 		.serial = "0000000012345678",
-	};
-	.iosPort = 5555;
+	},
+	.iosPort = 5555,
 };
 
 
@@ -188,6 +164,348 @@ static usConfig globalConf = {
 /*****************************************************************************/
 /**************************Private functions**********************************/
 /*****************************************************************************/
+static uint16_t find_sport(void)
+{
+	static uint16_t tcport =1;
+	if(tcport == 0xFFFF){
+		DEBUG("Port Reach To Max Reset it..\r\n");
+		tcport = 0;
+	}
+	return (++tcport);
+}
+/*
+********************BECAREFUL**********************
+*Used ios struct interel buffer to send ios package
+*Payload limit IOS_INTERBUF_SIZE
+*/
+static int32_t itunes_InterMemSendPacket(mux_itunes *iosDev, enum mux_protocol proto, 
+								void *header, const void *data, int length)
+{
+	int hdrlen;
+	int res;	
+	uint32_t trueSend = 0;
+
+	if(!iosDev){
+		return EUSTOR_ARG;
+	}
+	
+	switch(proto) {
+		case MUX_PROTO_VERSION:
+			hdrlen = sizeof(struct version_header);
+			break;
+		case MUX_PROTO_SETUP:
+			hdrlen = 0;
+			break;
+		case MUX_PROTO_TCP:
+			hdrlen = sizeof(struct tcphdr);
+			break;
+		default:
+			DEBUG("Invalid protocol %d for outgoing packet (hdr %p data %p len %d)\r\n", proto, header, data, length);	
+			return EUSTOR_PRO_PGEPRO;
+	}
+	DEBUG("send_packet(0x%x, %p, %p, %d)\r\n", proto, header, data, length);
+
+	int mux_header_size = ((iosDev->version < 2) ? 8 : sizeof(struct mux_header));
+	int total = mux_header_size + hdrlen + length;
+
+	if(total > sizeof(iosDev->interBuf)){
+		DEBUG("Tried to send setup packet larger than %dBytes (hdr %d data %d total %d) to device\n", 
+							sizeof(iosDev->interBuf), hdrlen, length, total);
+		return EUSTOR_MEM;
+	}
+	struct mux_header *mhdr = (struct mux_header *)(iosDev->interBuf);
+	mhdr->protocol = htonl(proto);
+	mhdr->length = htonl(total);
+	if (iosDev->version >= 2) {
+		mhdr->magic = htonl(0xfeedface);
+		if (proto == MUX_PROTO_SETUP) {
+			iosDev->tx_seq = 0;
+			iosDev->rx_seq = 0xFFFF;
+		}
+		mhdr->tx_seq = htons(iosDev->tx_seq);
+		mhdr->rx_seq = htons(iosDev->rx_seq);
+		iosDev->tx_seq++;
+	}
+	memcpy(iosDev->interBuf+ mux_header_size, header, hdrlen);
+	if(data && length)
+		memcpy(iosDev->interBuf+ mux_header_size + hdrlen, data, length);
+	
+	if((res = usUsb_BlukPacketSend(&(iosDev->usbIOS), iosDev->interBuf, 
+						total, &trueSend, PACKAGE_TIMEOUT)) != EUSTOR_OK){
+		DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
+							total, trueSend, res);
+		return res;
+	}
+	if(total % 512 == 0){
+		DEBUG("Send ZLP.....\n");
+		 usUsb_BlukPacketSend(&(iosDev->usbIOS), iosDev->interBuf, 
+						0, NULL, PACKAGE_TIMEOUT);
+	}
+	
+	DEBUG("sending packet ok(len %d) to device: successful\r\n", total);
+	
+	return EUSTOR_OK;
+}
+
+/*
+********************BECAREFUL**********************
+*decrease memcpy  to send ios package
+*iosHeaderAddress: ios protocol header memory address
+*payload: payload address
+*/
+static int32_t itunes_SendPacket(mux_itunes *iosDev, enum mux_protocol proto, 
+							void *header, const void *iosHeaderAddress, const void *payload, int length)
+{
+	uint32_t trueSend = 0;
+	int hdrlen;
+	int res;
+	struct mux_header *mhdr =NULL;
+	uint8_t *ptrpay = NULL;
+
+	if(!iosDev){
+		return EUSTOR_ARG;
+	}
+
+	switch(proto) {
+		case MUX_PROTO_VERSION:
+			hdrlen = sizeof(struct version_header);
+			break;
+		case MUX_PROTO_SETUP:
+			hdrlen = 0;
+			break;
+		case MUX_PROTO_TCP:
+			hdrlen = sizeof(struct tcphdr);
+			break;
+		default:
+			DEBUG("Invalid protocol %d for outgoing packet (hdr %p data %p len %d)\r\n", proto, header, payload, length);	
+			return EUSTOR_PRO_PGEPRO;
+	}
+	DEBUG("send_packet(0x%x, %p, %p, %d)\r\n", proto, header, payload, length);
+
+	int mux_header_size = ((iosDev->version < 2) ? 8 : sizeof(struct mux_header));
+	int total = mux_header_size + hdrlen + length;
+
+	/*Used internel memory to send*/
+	if(!iosHeaderAddress && total > sizeof(iosDev->interBuf)){
+		DEBUG("Tried to send setup packet larger than %dBytes (hdr %d data %d total %d) to device\n", 
+							sizeof(iosDev->interBuf), hdrlen, length, total);
+		return EUSTOR_MEM;
+	}
+	if(iosHeaderAddress){
+		mhdr = (struct mux_header *)(iosHeaderAddress); 	
+		ptrpay = (uint8_t*)iosHeaderAddress;
+	}else{
+		mhdr = (struct mux_header *)(iosDev->interBuf); 	
+		ptrpay = iosDev->interBuf;
+	}
+	mhdr->protocol = htonl(proto);
+	mhdr->length = htonl(total);
+	if (iosDev->version >= 2) {
+		mhdr->magic = htonl(0xfeedface);
+		if (proto == MUX_PROTO_SETUP) {
+			iosDev->itx_seq = 0;
+			iosDev->irx_seq = 0xFFFF;
+		}
+		mhdr->tx_seq = htons(iosDev->itx_seq);
+		mhdr->rx_seq = htons(iosDev->irx_seq);
+		iosDev->itx_seq++;
+	}
+	memcpy(ptrpay+ mux_header_size, header, hdrlen);
+	/*judge iosHeaderAddress is equal payload*/
+	if(iosHeaderAddress &&
+			(iosHeaderAddress+mux_header_size + hdrlen) == payload){
+		DEBUG("No Need to Memcpy[Good]\n");
+	}else if(iosHeaderAddress == NULL && length && payload){
+		memcpy(ptrpay+ mux_header_size + hdrlen, payload, length);
+	}else{
+		DEBUG("We Need to Send IOS Header First\n");
+		if((res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
+							total, &trueSend, PACKAGE_TIMEOUT)) != EUSTOR_OK){
+			DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
+								mux_header_size + hdrlen, trueSend, res);
+			return res;
+		}		
+		ptrpay = (uint8_t*)payload;
+		total = length;
+	}
+	
+	if(total && (res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
+						total, &trueSend, PACKAGE_TIMEOUT)) != EUSTOR_OK){
+		DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
+							total, trueSend, res);
+		return res;
+	}
+	if(total && total % 512 == 0){
+		DEBUG("Send ZLP.....\n");
+		 usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
+						0, NULL, PACKAGE_TIMEOUT);
+	}
+	
+	DEBUG("sending packet ok(len %d) to device: successful\r\n", total);
+	
+	return EUSTOR_OK;
+
+}
+
+static int32_t itunes_SendTCP(mux_itunes *iosDev, uint8_t flags, 
+				const uint8_t *iosHeaderAddress, const uint8_t *payload, int length)
+{
+	struct tcphdr *th = NULL;
+	struct mux_header *mhdr =NULL;	
+	uint32_t trueSend = 0;	
+	uint8_t *ptrpay = NULL;
+	int res;
+
+	if(!iosDev){
+		return EUSTOR_ARG;
+	}
+
+	DEBUG("[OUT]sport=%d dport=%d seq=%d ack=%d flags=0x%x window=%d[%d] len=%d\r\n",
+				iosDev->sport, iosDev->dport, 
+				iosDev->tx_seq, iosDev->tx_ack, flags, 
+				iosDev->tx_win, iosDev->tx_win >> 8, length);
+
+	uint8_t mux_header_size = ((iosDev->version < 2) ? 8 : sizeof(struct mux_header));
+	int total = mux_header_size + sizeof(struct tcphdr) + length;
+	int hdrlen = sizeof(struct tcphdr);
+
+	/*Used internel memory to send*/
+	if(!iosHeaderAddress && total > sizeof(iosDev->interBuf)){
+		DEBUG("Tried to send setup packet larger than %dBytes (hdr %d data %d total %d) to device\n", 
+							sizeof(iosDev->interBuf), hdrlen, length, total);
+		return EUSTOR_MEM;
+	}
+	if(iosHeaderAddress){
+		mhdr = (struct mux_header *)(iosHeaderAddress); 	
+		ptrpay = (uint8_t*)iosHeaderAddress;
+	}else{
+		mhdr = (struct mux_header *)(iosDev->interBuf); 	
+		ptrpay = iosDev->interBuf;
+	}
+	/*set muxd header*/
+	mhdr->protocol = htonl(MUX_PROTO_TCP);
+	mhdr->length = htonl(total);
+	if (iosDev->version >= 2) {
+		mhdr->magic = htonl(0xfeedface);
+		mhdr->tx_seq = htons(iosDev->itx_seq);
+		mhdr->rx_seq = htons(iosDev->irx_seq);
+		iosDev->itx_seq++;
+	}
+	/*Set tcp header*/
+	th = (struct tcphdr *)(ptrpay+ mux_header_size);
+	th->th_sport = htons(iosDev->sport);
+	th->th_dport = htons(iosDev->dport);
+	th->th_seq = htonl(iosDev->tx_seq);
+	th->th_ack = htonl(iosDev->tx_ack);
+	th->th_flags = flags;
+	th->th_off = sizeof(th) / 4;
+	th->th_win = htons(iosDev->tx_win >> 8);
+	
+	/*judge iosHeaderAddress is equal payload*/
+	if(iosHeaderAddress &&
+			(iosHeaderAddress+mux_header_size + hdrlen) == payload){
+		DEBUG("No Need to Memcpy[Good]\n");
+	}else if(iosHeaderAddress == NULL && length && payload){
+		memcpy(ptrpay+ mux_header_size + hdrlen, payload, length);
+	}else{
+		DEBUG("We Need to Send IOS Header First\n");
+		if((res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
+							total, &trueSend, PACKAGE_TIMEOUT)) != EUSTOR_OK){
+			DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
+								mux_header_size + hdrlen, trueSend, res);
+			return res;
+		}		
+		ptrpay = (uint8_t*)payload;
+		total = length;
+	}
+	
+	if(total && (res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
+						total, &trueSend, PACKAGE_TIMEOUT)) != EUSTOR_OK){
+		DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
+							total, trueSend, res);
+		return res;
+	}
+	if(total && total % 512 == 0){
+		DEBUG("Send ZLP.....\n");
+		 usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
+						0, NULL, PACKAGE_TIMEOUT);
+	}
+	
+	DEBUG("sending packet ok(len %d) to device: successful\r\n", total);
+	
+	return EUSTOR_OK;
+}
+
+static int32_t itunes_SendTCPAck(mux_itunes *iosDev)
+{
+	return itunes_SendTCP(iosDev, TH_ACK, NULL, NULL, 0);
+}
+
+static int32_t itunes_getIOSProVersion(mux_itunes *iosDev)
+{
+	struct version_header rvh, *vh;	
+	uint8_t mux_header_size; 
+	uint8_t cbuffer[512] = {0};
+	uint32_t trueRecv = 0;
+	int res;
+	struct mux_header *itunesHeader = NULL;
+	
+	if(!iosDev){
+		return EUSTOR_ARG;
+	}
+	if(iosDev->version == 1 || iosDev->version == 2){
+		DEBUG("Have Get itunes Protocol Verison[%d]\n", iosDev->version);
+		return EUSTOR_OK;
+	}
+	/*Reset version header*/
+	iosDev->version = 0;
+	iosDev->itx_seq = iosDev->irx_seq = 0;
+	/*Reset sequence*/
+	iosDev->tx_seq = iosDev->tx_ack = iosDev->tx_acked = 0;
+	iosDev->rx_seq = iosDev->rx_ack = iosDev->rx_recvd = iosDev->rx_win = 0; 
+	/*init tcp header*/
+	iosDev->sport = find_sport();
+	iosDev->dport= globalConf.iosPort;
+	iosDev->tx_win = IOS_WIN_SIZE;
+	
+	/*1.request PROTOCOL_VERSION*/
+	rvh.major = htonl(2);
+	rvh.minor = htonl(0);
+	rvh.padding = 0;
+
+	res = itunes_InterMemSendPacket(iosDev, MUX_PROTO_VERSION, &rvh, NULL, 0);
+	if(res != EUSTOR_OK) {
+		DEBUG("Error sending version request packet to device\r\n");
+		return res;
+	}
+	/*Send Successful receive response*/
+	mux_header_size = ((iosDev->version < 2) ? 8 : sizeof(struct mux_header));
+	res = usUsb_BlukPacketReceive(&(iosDev->usbIOS), cbuffer,  
+				sizeof(cbuffer), &trueRecv, PACKAGE_TIMEOUT);
+	if(res != EUSTOR_OK){
+		DEBUG("Error receive version request packet from phone\r\n");
+		return res;
+	}
+	vh = (struct version_header *)(cbuffer+mux_header_size);
+	vh->major = ntohl(vh->major);
+	vh->minor = ntohl(vh->minor);
+	if(vh->major != 2 && vh->major != 1) {
+		DEBUG("Device has unknown version %d.%d\r\n", vh->major, vh->minor);
+		return EUSTOR_PRO_PROVER;
+	}
+	iosDev->version = vh->major;
+
+	if (iosDev->version >= 2 &&
+		(res = itunes_InterMemSendPacket(iosDev, MUX_PROTO_SETUP, NULL, "\x07", 1)) != EUSTOR_OK) {
+		DEBUG("iPhone Send SetUP Package Failed\n");
+		return res;
+	}
+	
+	DEBUG("IOS Version Get Successful[ver.%d]\r\n", iosDev->version);
+	
+	return EUSTOR_OK;
+}
+
 static void itunes_ControlPackage(unsigned char *payload, uint32_t payload_length)
 {
 	if (payload_length > 0) {
@@ -216,7 +534,7 @@ static void itunes_ControlPackage(unsigned char *payload, uint32_t payload_lengt
 	}
 }
 
-static int itunes_ReceiveAck(mux_itunes *iosDev)
+static int32_t itunes_ReceiveAck(mux_itunes *iosDev)
 {
 	uint8_t buffer[512] = {0};
 	uint8_t *payload = NULL;
@@ -313,7 +631,7 @@ static void itunes_ResetReceive(mux_itunes *iosDev)
 				iosDev->usbIOS.vid, iosDev->usbIOS.pid); 	
 }
 
-static uint8_t aoa_SendProPackage(usbInfo *aoaDev, void *buffer, uint32_t size)
+static int32_t aoa_SendProPackage(usbInfo *aoaDev, void *buffer, uint32_t size)
 {
 	uint32_t actual_length = 0;
 	uint32_t already = 0;
@@ -349,7 +667,7 @@ static uint8_t aoa_SendProPackage(usbInfo *aoaDev, void *buffer, uint32_t size)
 	return EUSTOR_OK;
 }
 
-static uint8_t aoa_RecvProPackage(usbInfo *aoaDev, uint8_t* buffer, 
+static int32_t aoa_RecvProPackage(usbInfo *aoaDev, uint8_t* buffer, 
 										uint32_t tsize, uint32_t *rsize)
 {
 	uint8_t rc;
@@ -373,7 +691,7 @@ static uint8_t aoa_RecvProPackage(usbInfo *aoaDev, uint8_t* buffer,
 *Please reserved ios header before buffer
 *We think it reserved when you invoke the function
 */
-static uint8_t itunes_SendProPackage(mux_itunes *iosDev, void *buffer, uint32_t size)
+static int32_t itunes_SendProPackage(mux_itunes *iosDev, void *buffer, uint32_t size)
 {	
 	uint8_t *tbuffer = (uint8_t *)buffer;
 	uint32_t  sndSize = 0, curSize = 0, rx_win = 0;
@@ -419,7 +737,7 @@ static uint8_t itunes_SendProPackage(mux_itunes *iosDev, void *buffer, uint32_t 
 }
 
 
-static uint8_t itunes_RecvProPackage(mux_itunes *iosDev, uint8_t* buffer, 
+static int32_t itunes_RecvProPackage(mux_itunes *iosDev, uint8_t* buffer, 
 											uint32_t tsize, uint32_t *rsize)
 {
 	uint8_t *payload = NULL;	
@@ -517,352 +835,7 @@ static uint8_t itunes_RecvProPackage(mux_itunes *iosDev, uint8_t* buffer,
 	return EUSTOR_OK;
 }
 
-static uint16_t find_sport(void)
-{
-	static uint16_t tcport =1;
-	if(tcport == 0xFFFF){
-		DEBUG("Port Reach To Max Reset it..\r\n");
-		tcport = 0;
-	}
-	return (++tcport);
-}
-/*
-********************BECAREFUL**********************
-*Used ios struct interel buffer to send ios package
-*Payload limit IOS_INTERBUF_SIZE
-*/
-static int itunes_InterMemSendPacket(mux_itunes *iosDev, enum mux_protocol proto, 
-								void *header, const void *data, int length)
-{
-	int hdrlen;
-	int res;	
-	uint32_t trueSend = 0;
-
-	if(!iosDev){
-		return EUSTOR_ARG;
-	}
-	
-	switch(proto) {
-		case MUX_PROTO_VERSION:
-			hdrlen = sizeof(struct version_header);
-			break;
-		case MUX_PROTO_SETUP:
-			hdrlen = 0;
-			break;
-		case MUX_PROTO_TCP:
-			hdrlen = sizeof(struct tcphdr);
-			break;
-		default:
-			DEBUG("Invalid protocol %d for outgoing packet (hdr %p data %p len %d)\r\n", proto, header, data, length);	
-			return EUSTOR_PRO_PGEPRO;
-	}
-	DEBUG("send_packet(0x%x, %p, %p, %d)\r\n", proto, header, data, length);
-
-	int mux_header_size = ((iosDev->version < 2) ? 8 : sizeof(struct mux_header));
-	int total = mux_header_size + hdrlen + length;
-
-	if(total > sizeof(iosDev->interBuf)){
-		DEBUG("Tried to send setup packet larger than %dBytes (hdr %d data %d total %d) to device\n", 
-							sizeof(iosDev->interBuf), hdrlen, length, total);
-		return EUSTOR_MEM;
-	}
-	struct mux_header *mhdr = (struct mux_header *)(iosDev->interBuf);
-	mhdr->protocol = htonl(proto);
-	mhdr->length = htonl(total);
-	if (iosDev->version >= 2) {
-		mhdr->magic = htonl(0xfeedface);
-		if (proto == MUX_PROTO_SETUP) {
-			iosDev->tx_seq = 0;
-			iosDev->rx_seq = 0xFFFF;
-		}
-		mhdr->tx_seq = htons(iosDev->tx_seq);
-		mhdr->rx_seq = htons(iosDev->rx_seq);
-		iosDev->tx_seq++;
-	}
-	memcpy(iosDev->interBuf+ mux_header_size, header, hdrlen);
-	if(data && length)
-		memcpy(iosDev->interBuf+ mux_header_size + hdrlen, data, length);
-	
-	if((res = usUsb_BlukPacketSend(&(iosDev->usbIOS), iosDev->interBuf, 
-						total, &trueSend, PACKAGE_TIMEOUT)) != EUSTOR_OK){
-		DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
-							total, trueSend, res);
-		return res;
-	}
-	if(total % 512 == 0){
-		DEBUG("Send ZLP.....\n");
-		 usUsb_BlukPacketSend(&(iosDev->usbIOS), iosDev->interBuf, 
-						0, NULL, PACKAGE_TIMEOUT);
-	}
-	
-	DEBUG("sending packet ok(len %d) to device: successful\r\n", total);
-	
-	return EUSTOR_OK;
-}
-
-/*
-********************BECAREFUL**********************
-*decrease memcpy  to send ios package
-*iosHeaderAddress: ios protocol header memory address
-*payload: payload address
-*/
-static int itunes_SendPacket(mux_itunes *iosDev, enum mux_protocol proto, 
-							void *header, const void *iosHeaderAddress, const void *payload, int length)
-{
-	uint32_t trueSend = 0;
-	int hdrlen;
-	int res;
-	struct mux_header *mhdr =NULL;
-	uint8_t *ptrpay = NULL;
-
-	if(!iosDev){
-		return EUSTOR_ARG;
-	}
-
-	switch(proto) {
-		case MUX_PROTO_VERSION:
-			hdrlen = sizeof(struct version_header);
-			break;
-		case MUX_PROTO_SETUP:
-			hdrlen = 0;
-			break;
-		case MUX_PROTO_TCP:
-			hdrlen = sizeof(struct tcphdr);
-			break;
-		default:
-			DEBUG("Invalid protocol %d for outgoing packet (hdr %p data %p len %d)\r\n", proto, header, data, length);	
-			return EUSTOR_PRO_PGEPRO;
-	}
-	DEBUG("send_packet(0x%x, %p, %p, %d)\r\n", proto, header, payload, length);
-
-	int mux_header_size = ((iosDev->version < 2) ? 8 : sizeof(struct mux_header));
-	int total = mux_header_size + hdrlen + length;
-
-	/*Used internel memory to send*/
-	if(!iosHeaderAddress && total > sizeof(iosDev->interBuf)){
-		DEBUG("Tried to send setup packet larger than %dBytes (hdr %d data %d total %d) to device\n", 
-							sizeof(iosDev->interBuf), hdrlen, length, total);
-		return EUSTOR_MEM;
-	}
-	if(iosHeaderAddress){
-		mhdr = (struct mux_header *)(iosHeaderAddress); 	
-		ptrpay = (uint8_t*)iosHeaderAddress;
-	}else{
-		mhdr = (struct mux_header *)(iosDev->interBuf); 	
-		ptrpay = iosDev->interBuf;
-	}
-	mhdr->protocol = htonl(proto);
-	mhdr->length = htonl(total);
-	if (iosDev->version >= 2) {
-		mhdr->magic = htonl(0xfeedface);
-		if (proto == MUX_PROTO_SETUP) {
-			iosDev->itx_seq = 0;
-			iosDev->irx_seq = 0xFFFF;
-		}
-		mhdr->tx_seq = htons(iosDev->itx_seq);
-		mhdr->rx_seq = htons(iosDev->irx_seq);
-		iosDev->itx_seq++;
-	}
-	memcpy(ptrpay+ mux_header_size, header, hdrlen);
-	/*judge iosHeaderAddress is equal payload*/
-	if(iosHeaderAddress &&
-			(iosHeaderAddress+mux_header_size + hdrlen) == payload){
-		DEBUG("No Need to Memcpy[Good]\n");
-	}else if(iosHeaderAddress == NULL && length && payload){
-		memcpy(ptrpay+ mux_header_size + hdrlen, payload, length);
-	}else{
-		DEBUG("We Need to Send IOS Header First\n");
-		if((res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-							total, &trueSend, PACKAGE_TIMEOUT)) != EUSTOR_OK){
-			DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
-								mux_header_size + hdrlen, trueSend, res);
-			return res;
-		}		
-		ptrpay = (uint8_t*)payload;
-		total = length;
-	}
-	
-	if(total && (res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-						total, &trueSend, PACKAGE_TIMEOUT)) != EUSTOR_OK){
-		DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
-							total, trueSend, res);
-		return res;
-	}
-	if(total && total % 512 == 0){
-		DEBUG("Send ZLP.....\n");
-		 usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-						0, NULL, PACKAGE_TIMEOUT);
-	}
-	
-	DEBUG("sending packet ok(len %d) to device: successful\r\n", total);
-	
-	return EUSTOR_OK;
-
-}
-
-/*
-*send_tcp  will auto select memroy type to send package,
-*if package size less than MPACKET_SIZE, it will use send_small_packet
-*/
-static int itunes_SendTCP(mux_itunes *iosDev, uint8_t flags, 
-								const uint8_t *iosHeaderAddress, const uint8_t *payload, int length)
-{
-	struct tcphdr *th = NULL;
-	struct mux_header *mhdr =NULL;	
-	uint32_t trueSend = 0;	
-	uint8_t *ptrpay = NULL;
-	int res;
-
-	if(!iosDev){
-		return EUSTOR_ARG;
-	}
-
-	DEBUG("[OUT]sport=%d dport=%d seq=%d ack=%d flags=0x%x window=%d[%d] len=%d\r\n",
-				iosDev->sport, iosDev->dport, 
-				iosDev->tx_seq, iosDev->tx_ack, flags, 
-				iosDev->tx_win, iosDev->tx_win >> 8, length);
-
-	uint8_t mux_header_size = ((iosDev->version < 2) ? 8 : sizeof(struct mux_header));
-	int total = mux_header_size + sizeof(struct tcphdr) + length;
-	int hdrlen = sizeof(struct tcphdr);
-
-	/*Used internel memory to send*/
-	if(!iosHeaderAddress && total > sizeof(iosDev->interBuf)){
-		DEBUG("Tried to send setup packet larger than %dBytes (hdr %d data %d total %d) to device\n", 
-							sizeof(iosDev->interBuf), hdrlen, length, total);
-		return EUSTOR_MEM;
-	}
-	if(iosHeaderAddress){
-		mhdr = (struct mux_header *)(iosHeaderAddress); 	
-		ptrpay = (uint8_t*)iosHeaderAddress;
-	}else{
-		mhdr = (struct mux_header *)(iosDev->interBuf); 	
-		ptrpay = iosDev->interBuf;
-	}
-	/*set muxd header*/
-	mhdr->protocol = htonl(MUX_PROTO_TCP);
-	mhdr->length = htonl(total);
-	if (iosDev->version >= 2) {
-		mhdr->magic = htonl(0xfeedface);
-		mhdr->tx_seq = htons(iosDev->itx_seq);
-		mhdr->rx_seq = htons(iosDev->irx_seq);
-		iosDev->itx_seq++;
-	}
-	/*Set tcp header*/
-	th = (struct tcphdr *)(ptrpay+ mux_header_size);
-	th->th_sport = htons(iosDev->sport);
-	th->th_dport = htons(iosDev->dport);
-	th->th_seq = htonl(iosDev->tx_seq);
-	th->th_ack = htonl(iosDev->tx_ack);
-	th->th_flags = flags;
-	th->th_off = sizeof(th) / 4;
-	th->th_win = htons(iosDev->tx_win >> 8);
-	
-	/*judge iosHeaderAddress is equal payload*/
-	if(iosHeaderAddress &&
-			(iosHeaderAddress+mux_header_size + hdrlen) == payload){
-		DEBUG("No Need to Memcpy[Good]\n");
-	}else if(iosHeaderAddress == NULL && length && payload){
-		memcpy(ptrpay+ mux_header_size + hdrlen, payload, length);
-	}else{
-		DEBUG("We Need to Send IOS Header First\n");
-		if((res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-							total, &trueSend, PACKAGE_TIMEOUT)) != EUSTOR_OK){
-			DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
-								mux_header_size + hdrlen, trueSend, res);
-			return res;
-		}		
-		ptrpay = (uint8_t*)payload;
-		total = length;
-	}
-	
-	if(total && (res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-						total, &trueSend, PACKAGE_TIMEOUT)) != EUSTOR_OK){
-		DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
-							total, trueSend, res);
-		return res;
-	}
-	if(total && total % 512 == 0){
-		DEBUG("Send ZLP.....\n");
-		 usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-						0, NULL, PACKAGE_TIMEOUT);
-	}
-	
-	DEBUG("sending packet ok(len %d) to device: successful\r\n", total);
-	
-	return EUSTOR_OK;
-}
-
-static int itunes_SendTCPAck(mux_itunes *iosDev)
-{
-	return itunes_SendTCP(iosDev, TH_ACK, NULL, NULL, 0);
-}
-
-static uint8_t itunes_getIOSProVersion(mux_itunes *iosDev)
-{
-	struct version_header rvh, *vh;	
-	uint8_t mux_header_size; 
-	uint8_t cbuffer[512] = {0};
-	uint32_t trueRecv = 0;
-	int res;
-	struct mux_header *itunesHeader = NULL;
-	
-	if(!iosDev){
-		return EUSTOR_ARG;
-	}
-	if(iosDev->version == 1 || iosDev->version == 2){
-		DEBUG("Have Get itunes Protocol Verison[%d]\n", iosDev->version);
-		return EUSTOR_OK;
-	}
-	/*Reset version header*/
-	iosDev->version = 0;
-	iosDev->itx_seq = iosDev->irx_seq = 0;
-	/*Reset sequence*/
-	iosDev->tx_seq = iosDev->tx_ack = iosDev->tx_acked = 0;
-	iosDev->rx_seq = iosDev->rx_ack = iosDev->rx_recvd = iosDev->rx_win = 0; 
-	/*init tcp header*/
-	iosDev->sport = find_sport();
-	iosDev->dport= globalConf.iosPort;
-	iosDev->tx_win = IOS_WIN_SIZE;
-	
-	/*1.request PROTOCOL_VERSION*/
-	rvh.major = htonl(2);
-	rvh.minor = htonl(0);
-	rvh.padding = 0;
-
-	res = itunes_InterMemSendPacket(iosDev, MUX_PROTO_VERSION, &rvh, NULL, 0);
-	if(res != EUSTOR_OK) {
-		DEBUG("Error sending version request packet to device\r\n");
-		return res;
-	}
-	/*Send Successful receive response*/
-	mux_header_size = ((iosDev->version < 2) ? 8 : sizeof(struct mux_header));
-	res = usUsb_BlukPacketReceive(&(iosDev->usbIOS), cbuffer,  sizeof(cbuffer), &trueRecv);
-	if(res != EUSTOR_OK){
-		DEBUG("Error receive version request packet from phone\r\n");
-		return res;
-	}
-	vh = (struct version_header *)(cbuffer+mux_header_size);
-	vh->major = ntohl(vh->major);
-	vh->minor = ntohl(vh->minor);
-	if(vh->major != 2 && vh->major != 1) {
-		DEBUG("Device has unknown version %d.%d\r\n", vh->major, vh->minor);
-		return EUSTOR_PRO_PROVER;
-	}
-	iosDev->version = vh->major;
-
-	if (iosDev->version >= 2 &&
-		(res = itunes_InterMemSendPacket(iosDev, MUX_PROTO_SETUP, NULL, "\x07", 1)) != EUSTOR_OK) {
-		DEBUG("iPhone Send SetUP Package Failed\n");
-		return res;
-	}
-	
-	DEBUG("IOS Version Get Successful[ver.%d]\r\n", iosDev->version);
-	
-	return EUSTOR_OK;
-}
-
-static uint8_t LINUX_ConnectIOSPhone(mux_itunes *iosInfo)
+static int32_t LINUX_ConnectIOSPhone(mux_itunes *iosInfo)
 {
 	uint8_t mux_header_size; 
 	uint32_t trueRecv = 0;
@@ -932,7 +905,7 @@ static uint8_t LINUX_ConnectIOSPhone(mux_itunes *iosInfo)
 				return EUSTOR_PRO_CONNECT;
 			} else {			
 				iosInfo->tx_seq++;
-				iosInfo->.tx_ack++;
+				iosInfo->tx_ack++;
 				iosInfo->rx_recvd = iosInfo->rx_seq;
 				if((res = itunes_SendTCP(iosInfo, TH_ACK, NULL, NULL, 0)) != EUSTOR_OK) {
 					DEBUG("Error sending TCP ACK to device(%d->%d)\n", 
@@ -952,7 +925,7 @@ static uint8_t LINUX_ConnectIOSPhone(mux_itunes *iosInfo)
 	return EUSTOR_OK;
 }
 
-static uint8_t LINUX_USBPowerControl(USBPowerValue value)
+static int32_t LINUX_USBPowerControl(USBPowerValue value)
 {
 	int fd;
 
@@ -976,7 +949,7 @@ static uint8_t LINUX_USBPowerControl(USBPowerValue value)
 	return EUSTOR_OK;
 }
 
-static uint8_t LINUX_SwitchAOAMode(libusb_device* dev, struct accessory_t aoaConfig)
+static int32_t LINUX_SwitchAOAMode(libusb_device* dev, struct accessory_t aoaConfig)
 {
 	int res=-1, j;
 	libusb_device_handle *handle;
@@ -1018,11 +991,11 @@ static uint8_t LINUX_SwitchAOAMode(libusb_device* dev, struct accessory_t aoaCon
 			return EUSTOR_USB_CONTROL;
 		}else{
 			aoaConfig.aoa_version = ((version[1] << 8) | version[0]);
-			PRODEBUG("Device[%d-%d] supports AOA %d.0!\n", bus, address, aoaConfig.aoa_version);
+			DEBUG("Device[%d-%d] supports AOA %d.0!\n", bus, address, aoaConfig.aoa_version);
 		}
 		/* In case of a no_app accessory, the version must be >= 2 */
 		if((aoaConfig.aoa_version < 2) && !aoaConfig.manufacturer) {
-			PRODEBUG("Connecting without an Android App only for AOA 2.0[%d-%d]\n", bus,address);
+			DEBUG("Connecting without an Android App only for AOA 2.0[%d-%d]\n", bus,address);
 			libusb_free_config_descriptor(config);
 			libusb_close(handle);
 			return EUSTOR_PRO_SETAOA;
@@ -1146,7 +1119,7 @@ static uint8_t LINUX_SwitchAOAMode(libusb_device* dev, struct accessory_t aoaCon
 /**************************Public functions***********************************/
 /*****************************************************************************/
 
-uint8_t usProtocol_init(usConfig *conf)
+int32_t usProtocol_init(usConfig *conf)
 {
 	/*Init IOS transfer port and AOA app information*/
 	if(conf){
@@ -1155,7 +1128,7 @@ uint8_t usProtocol_init(usConfig *conf)
 	return EUSTOR_OK;
 }
 
-uint8_t usProtocol_PhoneDetect(usPhoneinfo *phone)
+int32_t usProtocol_PhoneDetect(usPhoneinfo *phone)
 {
 	int cnt, i, res, j;
 	libusb_device **devs;	
@@ -1236,7 +1209,7 @@ uint8_t usProtocol_PhoneDetect(usPhoneinfo *phone)
 		
 			DEBUG("Setting configuration for device %d-%d, from %d to %d\n", bus, address, current_config, devdesc.bNumConfigurations);
 			if((res = libusb_set_configuration(handle, devdesc.bNumConfigurations)) != 0) {
-				PRODEBUG("Could not set configuration %d for device %d-%d: %d\n", devdesc.bNumConfigurations, bus, address, res);
+				DEBUG("Could not set configuration %d for device %d-%d: %d\n", devdesc.bNumConfigurations, bus, address, res);
 				libusb_close(handle);
 				continue;
 			}
@@ -1244,7 +1217,7 @@ uint8_t usProtocol_PhoneDetect(usPhoneinfo *phone)
 		
 		struct libusb_config_descriptor *config;
 		if((res = libusb_get_active_config_descriptor(dev, &config)) != 0) {
-			PRODEBUG("Could not get configuration descriptor for device %d-%d: %d\n", bus, address, res);
+			DEBUG("Could not get configuration descriptor for device %d-%d: %d\n", bus, address, res);
 			libusb_close(handle);
 			continue;
 		}
@@ -1281,7 +1254,8 @@ uint8_t usProtocol_PhoneDetect(usPhoneinfo *phone)
 				phoneTmp.ep_out = intf->endpoint[0].bEndpointAddress;
 				phoneTmp.ep_in = intf->endpoint[1].bEndpointAddress;
 
-				DEBUG("Found interface %d with swapped endpoints %02x/%02x for device %d-%d\n", usb_phone.interface, usb_phone.ep_out, usb_phone.ep_in, bus, address);
+				DEBUG("Found interface %d with swapped endpoints %02x/%02x for device %d-%d\n", 
+							phoneTmp.interface, phoneTmp.ep_out, phoneTmp.ep_in, bus, address);
 				break;
 			} else {
 				DEBUG("Endpoint type mismatch for interface %d of device %d-%d\n", intf->bInterfaceNumber, bus, address);
@@ -1310,7 +1284,7 @@ uint8_t usProtocol_PhoneDetect(usPhoneinfo *phone)
 			DEBUG("Could not determine wMaxPacketSize for device %d-%d, setting to 64\n", bus, address);
 			phoneTmp.wMaxPacketSize = 64;
 		} else {
-			PRODEBUG("Using wMaxPacketSize=%d for device %d-%d\n", phoneTmp.wMaxPacketSize, bus, address);
+			DEBUG("Using wMaxPacketSize=%d for device %d-%d\n", phoneTmp.wMaxPacketSize, bus, address);
 		}
 		
 		phoneTmp.vid = devdesc.idVendor;
@@ -1338,7 +1312,7 @@ uint8_t usProtocol_PhoneDetect(usPhoneinfo *phone)
 }
 
 
-uint8_t usProtocol_ConnectPhone(usPhoneinfo *phone)
+int32_t usProtocol_ConnectPhone(usPhoneinfo *phone)
 {
 	if(!phone){
 		DEBUG("Bad Argument\n");
@@ -1386,15 +1360,15 @@ void usProtocol_PhoneRelease(usPhoneinfo *phone)
 
 
 
-uint8_t usProtocol_SendPackage(usPhoneinfo *phone, void *buffer, uint32_t size)
+int32_t usProtocol_SendPackage(usPhoneinfo *phone, void *buffer, uint32_t size)
 {
 	if(!phone){
 		return EUSTOR_ARG;
 	}
 
-	if(phone->usType == PRO_IOS){
+	if(phone->phoneType == PRO_IOS){
 		return itunes_SendProPackage(&(phone->phoneInfo.phoneIOS), buffer, size);
-	}else if(phone->usType == PRO_ANDROID){
+	}else if(phone->phoneType == PRO_ANDROID){
 		return aoa_SendProPackage(&(phone->phoneInfo.phoneAndroid), buffer, size);
 	}else{
 		DEBUG("Unknown Phone Type:%d\n", phone->phoneType);
@@ -1404,11 +1378,11 @@ uint8_t usProtocol_SendPackage(usPhoneinfo *phone, void *buffer, uint32_t size)
 	return EUSTOR_OK;
 }
 
-uint8_t usProtocol_RecvPackage(usPhoneinfo *phone, uint8_t *buffer, uint32_t tsize, uint32_t *rsize)
+int32_t usProtocol_RecvPackage(usPhoneinfo *phone, uint8_t *buffer, uint32_t tsize, uint32_t *rsize)
 {
-	if(phone->usType == PRO_IOS){
+	if(phone->phoneType == PRO_IOS){
 		return itunes_RecvProPackage(&(phone->phoneInfo.phoneIOS), buffer, tsize, rsize);
-	}else if(phone->usType == PRO_ANDROID){
+	}else if(phone->phoneType == PRO_ANDROID){
 		return aoa_RecvProPackage(&(phone->phoneInfo.phoneAndroid), buffer, tsize, rsize);
 	}else{
 		DEBUG("Unknown Phone Type:%d\n", phone->phoneType);

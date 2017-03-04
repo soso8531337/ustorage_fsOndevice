@@ -20,15 +20,15 @@ extern "C" {
 #endif
 
 
-uint8_t usDisk_init(void);
+int32_t usDisk_init(void);
 void usDisk_PlugCallBack(int action, char *dev);
-uint8_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE], 
+int32_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE], 
 						void *buff, int64_t offset, int32_t size);
 
-uint8_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE], 
+int32_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE], 
 						void *buff, int64_t offset, int32_t size);
 
-uint8_t usDisk_diskCreate(char abspath[MAX_FILENAME_SIZE], 
+int32_t usDisk_diskCreate(char abspath[MAX_FILENAME_SIZE], 
 						int8_t isdir, int32_t actime, int32_t modtime);
 
 #ifdef __cplusplus

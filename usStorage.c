@@ -50,11 +50,12 @@
 #include "usDisk.h"
 #include "usProtocol.h"
 #include "usSys.h"
+#include "usEvent.h"
 #include "usError.h"
 
 /*512 used for ios header offset, 24 used protocol header, 256K used for payload*/
 #define US_RESERVED_SIZE	512
-#define US_BUFFER_SIZE		(US_BUFFER_SIZE+24+256*1024) 
+#define US_BUFFER_SIZE		(US_RESERVED_SIZE+24+256*1024) 
 
 enum connect_state {
 	CON_INIT=0,
@@ -71,7 +72,7 @@ struct usStor{
 };
 
 struct usStor usContext;
-
+volatile static uint8_t phonePlugin = 0;
 
 /*****************************************************************************/
 /**************************Private functions**********************************/
@@ -164,13 +165,13 @@ static void usStorage_init(void)
 }
 
 
-static uint8_t usStorage_RecvPackage(usPhoneinfo *phoneDev, uint8_t *buffer, 
+static int32_t usStorage_RecvPackage(usPhoneinfo *phoneDev, uint8_t *buffer, 
 									int32_t bufSize, uint32_t *recvSize)
 {
 	int res;
 	uint32_t paySize = 0, curSize, totalSize = 0;
 	int32_t headMagic = 0;
-	uStorPro_fsOnDev proHeader;
+	struct uStorPro_fsOnDev proHeader;
 
 	if(!phoneDev || !buffer || !recvSize){
 		return EUSTOR_ARG;
@@ -187,7 +188,7 @@ static uint8_t usStorage_RecvPackage(usPhoneinfo *phoneDev, uint8_t *buffer,
 	if(headMagic == PRO_BASIC_MAGIC){
 		*recvSize = paySize;		
 		DEBUG("Request Protocol Magic, Request Receive Finish[%dBytes]\n", *recvSize);
-		return EUSTOR_OK
+		return EUSTOR_OK;
 	}
 	if(headMagic != PRO_FSONDEV_MAGIC){
 		DEBUG("Unknown Magic :%u\n", headMagic);
@@ -195,7 +196,7 @@ static uint8_t usStorage_RecvPackage(usPhoneinfo *phoneDev, uint8_t *buffer,
 		return EUSTOR_OK;
 	}
 
-	memcpy(&proHeader. buffer, uStorPro_fsOnDev);
+	memcpy(&proHeader, buffer, sizeof(struct uStorPro_fsOnDev));
 	if(bufSize < proHeader.len+PRO_HDR_SZIE){
 		DEBUG("Protocol Package is Too Big[%d/%d]\n", bufSize, proHeader.len+PRO_HDR_SZIE);
 		return EUSTOR_OK;
@@ -220,19 +221,19 @@ static uint8_t usStorage_RecvPackage(usPhoneinfo *phoneDev, uint8_t *buffer,
 	return EUSTOR_OK;
 }
 
-static uint8_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev, 
+static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev, 
 									uint8_t *buffer, uint32_t buffsize, uint32_t paylength)
 {
-	uStorPro_fsOnDev *proHeader = NULL;
+	struct uStorPro_fsOnDev *proHeader = NULL;
 	uint32_t usedSize, sndSize = 0;
-	uint32_t headLen = sizeof(uStorPro_fsOnDev);
+	uint32_t headLen = sizeof(struct uStorPro_fsOnDev);
 	uint8_t *payload = NULL;
 
 	if(!phoneDev || !buffer){
 		return EUSTOR_ARG;
 	}
 
-	proHeader = (uStorPro_fsOnDev *)buffer;
+	proHeader = (struct uStorPro_fsOnDev *)buffer;
 
 	if(proHeader->head == PRO_BASIC_MAGIC){
 		struct uStorPro_headInfo baseHeader;
@@ -289,13 +290,12 @@ void phoneCallBack(int state)
 /*****************************************************************************/
 /**************************Public functions***********************************/
 /*****************************************************************************/
-volatile static uint8_t phonePlugin = 0;
 
 int main(int argc, char **argv)
 {
 	volatile static uint8_t conState = CON_INIT;
 	uint32_t truRecvSize;	
-	usEventArg eventarg;
+	struct usEventArg eventarg;
 	
 	DEBUG("uStorage Filesystem on Device Running[%s %s].\r\n", __DATE__, __TIME__);
 
@@ -347,7 +347,7 @@ int main(int argc, char **argv)
 			goto loop_next;
 		}
 		if(truRecvSize && usStorage_ProtocolHandle(&(usContext.phone), 
-					usContext.uspayload, truRecvSize) != EUSTOR_OK){
+						usContext.uspayload, usContext.uspaylen, truRecvSize) != EUSTOR_OK){
 			DEBUG("RecvPackage Error\n");
 			conState == CON_CNTING;
 			goto loop_next;

@@ -8,6 +8,8 @@
  */
 #include <stdint.h>
 #include <stdio.h>
+#include <stdarg.h>
+
 
 void log_debug(FILE *fp, char *fname, const char *func, int lineno, char *fmt, ...)
 {

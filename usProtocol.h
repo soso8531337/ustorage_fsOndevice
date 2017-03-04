@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdint.h>
+#include "usUsb.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,6 +29,7 @@ extern "C" {
 #define ntohs(A)		htons(A)
 #define ntohl(A)		htonl(A)
 
+#define IOS_INTERBUF_SIZE	(48*1024)
 
 struct accessory_t {
 	uint32_t aoa_version;
@@ -47,12 +49,34 @@ typedef struct{
 	int iosPort;
 }usConfig;
 
+typedef struct{
+	uint8_t version; /*Protocol version*/
+	uint16_t irx_seq; /*itunes protocol rx seq*/
+	uint16_t itx_seq;	/*itunes protocol tx seq*/
+	/*tcp connection information*/
+	uint16_t sport, dport;
+	uint32_t tx_seq, tx_ack, tx_acked, tx_win;
+	uint32_t rx_seq, rx_recvd, rx_ack, rx_win;
+	int flags;	
+	usbInfo usbIOS;
+	uint8_t interBuf[IOS_INTERBUF_SIZE]; /*Internel buffer, used for small data send/receive*/
+}mux_itunes;
 
-uint8_t usProtocol_init(usConfig *conf);
-uint8_t usProtocol_PhoneDetect(usPhoneinfo *phone);
+
+typedef struct {
+	uint8_t phoneType;	/*Android or IOS*/
+	union{
+		mux_itunes phoneIOS;
+		usbInfo phoneAndroid;
+	}phoneInfo;
+	
+}usPhoneinfo;
+
+int32_t usProtocol_init(usConfig *conf);
+int32_t usProtocol_PhoneDetect(usPhoneinfo *phone);
 void usProtocol_PhoneRelease(usPhoneinfo *phone);
-uint8_t usProtocol_SendPackage(usPhoneinfo *phone, void *buffer, uint32_t size);
-uint8_t usProtocol_RecvPackage(usPhoneinfo *phone, uint8_t *buffer, uint32_t tsize, uint32_t *rsize);
+int32_t usProtocol_SendPackage(usPhoneinfo *phone, void *buffer, uint32_t size);
+int32_t usProtocol_RecvPackage(usPhoneinfo *phone, uint8_t *buffer, uint32_t tsize, uint32_t *rsize);
 
 #ifdef __cplusplus
 }

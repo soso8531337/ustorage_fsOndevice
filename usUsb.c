@@ -25,7 +25,7 @@
 /*
 *osPriv is reserved
 */
-uint8_t usUsb_Init(void *osPriv)
+int32_t usUsb_Init(void *osPriv)
 {
 	static uint8_t usbinit = 0;
 	int res;
@@ -42,7 +42,7 @@ uint8_t usUsb_Init(void *osPriv)
 	return EUSTOR_OK;
 }
 
-uint8_t usUsb_releaseInterface(usbInfo *usbDev)
+int32_t usUsb_releaseInterface(usbInfo *usbDev)
 {
 	if(!usbDev){
 		return EUSTOR_ARG;
@@ -51,14 +51,14 @@ uint8_t usUsb_releaseInterface(usbInfo *usbDev)
 	
 	DEBUG("Destory Usb Resource\r\n");
 	
-	libusb_release_interface((dev, usbDev->interface);
+	libusb_release_interface(dev, usbDev->interface);
 	libusb_close(dev);
 
 	return EUSTOR_OK;
 }
 
 
-uint8_t usUsb_SendControlRequest(void *osPriv, 
+int32_t usUsb_SendControlRequest(void *osPriv, 
 			uint8_t bmRequestType, uint8_t bRequest, 
 			uint16_t wValue, uint16_t wIndex, uint16_t wLength,  void * data)
 {
@@ -70,7 +70,7 @@ uint8_t usUsb_SendControlRequest(void *osPriv,
 	return (rc < 0)?EUSTOR_USB_CONTROL:EUSTOR_OK;
 }
 
-uint8_t usUsb_GetDeviceDescriptor(void *osPriv, USB_StdDesDevice_t *usbDeviceDescriptor)
+int32_t usUsb_GetDeviceDescriptor(void *osPriv, USB_StdDesDevice_t *usbDeviceDescriptor)
 {
 	libusb_device_handle *dev_handle;
 
@@ -86,9 +86,9 @@ uint8_t usUsb_GetDeviceDescriptor(void *osPriv, USB_StdDesDevice_t *usbDeviceDes
 	return EUSTOR_OK;
 }
 
-uint8_t usUsb_SetDeviceConfigDescriptor(void *osPriv, uint8_t cfgindex)
+int32_t usUsb_SetDeviceConfigDescriptor(void *osPriv, uint8_t cfgindex)
 {
-	if(!usbdev){
+	if(!osPriv){
 		return EUSTOR_ARG;
 	}
 	
@@ -100,7 +100,7 @@ uint8_t usUsb_SetDeviceConfigDescriptor(void *osPriv, uint8_t cfgindex)
 	return EUSTOR_OK;
 }
 
-uint8_t usUsb_BlukPacketReceive(usbInfo *usbDev, uint8_t *buffer, 
+int32_t usUsb_BlukPacketReceive(usbInfo *usbDev, uint8_t *buffer, 
 										uint32_t length, uint32_t *aLength, int timeout)
 {
 	int8_t rc;
@@ -136,7 +136,7 @@ uint8_t usUsb_BlukPacketReceive(usbInfo *usbDev, uint8_t *buffer,
 }
 
 
-uint8_t usUsb_BlukPacketSend(usbInfo *usbDev, uint8_t *buffer, 
+int32_t usUsb_BlukPacketSend(usbInfo *usbDev, uint8_t *buffer, 
 										uint32_t length, uint32_t *aLength, int timeout)
 {
 	int8_t rc;
@@ -172,7 +172,7 @@ uint8_t usUsb_BlukPacketSend(usbInfo *usbDev, uint8_t *buffer,
 
 		already += transferred;
 		DEBUG("LIBUSB Send %u/%d.\r\n", transferred, length);
-	}while(already < length)
+	}while(already < length);
 
 	if(aLength){
 		*aLength = length;

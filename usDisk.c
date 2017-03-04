@@ -31,6 +31,7 @@
 #include <linux/netlink.h>
 #include <sys/ioctl.h>
 #include <scsi/sg.h>
+#include <utime.h>
 
 #include "usDisk.h"
 #include "usUsb.h"
@@ -52,7 +53,7 @@
 
 
 
-uint8_t usDisk_init(void)
+int32_t usDisk_init(void)
 {
 	disk_init();
 	return EUSTOR_OK;
@@ -73,10 +74,10 @@ void usDisk_PlugCallBack(int action, char *dev)
 	strcpy(raction.dev, dev);
 	raction.action = action;
 
-	disk_aciton_func(&action);
+	disk_aciton_func(&raction);
 }
 
-uint8_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE], 
+int32_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE], 
 						void *buff, int64_t offset, int32_t size)
 {
 	int fd;
@@ -122,7 +123,7 @@ uint8_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE],
 
 }
 
-uint8_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE], 
+int32_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE], 
 						void *buff, int64_t offset, int32_t size)
 {
 	int fd;
@@ -162,7 +163,7 @@ uint8_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE],
 	return EUSTOR_OK;
 }
 
-uint8_t usDisk_diskCreate(char abspath[MAX_FILENAME_SIZE], 
+int32_t usDisk_diskCreate(char abspath[MAX_FILENAME_SIZE], 
 						int8_t isdir, int32_t actime, int32_t modtime)
 {
 	int res;

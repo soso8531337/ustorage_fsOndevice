@@ -35,10 +35,10 @@
 #include "usError.h"
 #include "usUsb.h"
 #include "protocol.h"
+#include "usSys.h"
 
 
-
-uint8_t usDecode_BasicMagicHandle(struct uStorPro_headInfo *proHeader)
+int32_t usDecode_BasicMagicHandle(struct uStorPro_headInfo *proHeader)
 {
 	
 	if(!proHeader){
@@ -51,7 +51,7 @@ uint8_t usDecode_BasicMagicHandle(struct uStorPro_headInfo *proHeader)
 	return EUSTOR_OK;
 }
 
-uint8_t usDecode_ReadHandle(uStorPro_fsOnDev *proHeader, uint8_t *readHeader, uint32_t buffSize)
+int32_t usDecode_ReadHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *readHeader, uint32_t buffSize)
 {	
 
 	if(!proHeader ||!readHeader){
@@ -60,7 +60,7 @@ uint8_t usDecode_ReadHandle(uStorPro_fsOnDev *proHeader, uint8_t *readHeader, ui
 		return EUSTOR_ARG;
 	}
 	if(proHeader->version == PRO_FSONDEV_VER1){
-		struct operation_rw *readInfo = (struct operation_rw)readHeader;		
+		struct operation_rw *readInfo = (struct operation_rw *)readHeader;		
 		char abspath[4096] = {0};
 		int64_t offset= readInfo->offset;
 		int32_t size = readInfo->size;
@@ -87,7 +87,7 @@ uint8_t usDecode_ReadHandle(uStorPro_fsOnDev *proHeader, uint8_t *readHeader, ui
 	return EUSTOR_OK;
 }
 
-uint8_t usDecode_WriteHandle(uStorPro_fsOnDev *proHeader, uint8_t *writeHeader, uint32_t payloadSize)
+int32_t usDecode_WriteHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *writeHeader, uint32_t payloadSize)
 {
 	if(!proHeader ||!writeHeader){
 		proHeader->len = 0;
@@ -95,7 +95,7 @@ uint8_t usDecode_WriteHandle(uStorPro_fsOnDev *proHeader, uint8_t *writeHeader, 
 		return EUSTOR_ARG;
 	}
 	if(proHeader->version == PRO_FSONDEV_VER1){
-		struct operation_rw *writeInfo = (struct operation_rw)writeHeader;		
+		struct operation_rw *writeInfo = (struct operation_rw *)writeHeader;		
 		char abspath[4096] = {0};
 		int64_t offset= writeInfo->offset;
 		int32_t size = writeInfo->size;
@@ -123,7 +123,7 @@ uint8_t usDecode_WriteHandle(uStorPro_fsOnDev *proHeader, uint8_t *writeHeader, 
 }
 
 
-uint8_t usDecode_CreateHandle(uStorPro_fsOnDev *proHeader, uint8_t *creatPtr, uint32_t ptrLen)
+int32_t usDecode_CreateHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *creatPtr, uint32_t ptrLen)
 {
 
 	if(!proHeader || !creatPtr){
@@ -151,7 +151,7 @@ uint8_t usDecode_CreateHandle(uStorPro_fsOnDev *proHeader, uint8_t *creatPtr, ui
 	return EUSTOR_OK;
 }
 
-uint8_t usDecode_DeleteHandle(uStorPro_fsOnDev *proHeader, uint8_t *delPtr, uint32_t ptrLen)
+int32_t usDecode_DeleteHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *delPtr, uint32_t ptrLen)
 {
 	if(!proHeader || !delPtr){		
 		proHeader->len = 0;
@@ -178,7 +178,7 @@ uint8_t usDecode_DeleteHandle(uStorPro_fsOnDev *proHeader, uint8_t *delPtr, uint
 	return EUSTOR_OK;
 }
 
-uint8_t usDecode_MoveHandle(uStorPro_fsOnDev *proHeader, uint8_t *MovPtr, uint32_t ptrLen)
+int32_t usDecode_MoveHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *MovPtr, uint32_t ptrLen)
 {
 	if(!proHeader || !MovPtr){		
 		proHeader->len = 0;

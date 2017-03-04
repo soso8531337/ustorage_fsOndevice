@@ -28,7 +28,8 @@
 #include "usDisk.h"
 #include "usProtocol.h"
 #include "usSys.h"
-#include "usFirmware.h"
+#include "usEvent.h"
+#include "usError.h"
 
 #define PHONE_BUS_LOC           "usb1/1-1/1-1.2"
 #define DISK_BUS_LOC            "usb1/1-1/1-1.1"
@@ -60,8 +61,10 @@ struct udevd_uevent_msg {
 	char envbuf[];
 };
 
+static struct usEventArg eventConf;
 
-static int initNetlinkSock(void)
+
+static int32_t initNetlinkSock(void)
 {
 	struct sockaddr_nl snl;
 	int retval, sockfd = -1, dev_fd;
@@ -117,7 +120,7 @@ static struct udevd_uevent_msg *get_msg_from_envbuf(const char *buf, int buf_siz
 		keylen = strlen(key);
 		msg->envp[i] = key;
 		bufpos += keylen + 1;
-		SDEBUGOUT( "add '%s' to msg.envp[%i]\r\n", msg->envp[i], i);
+		DEBUG( "add '%s' to msg.envp[%i]\r\n", msg->envp[i], i);
 
 		/* remember some keys for further processing */
 		if (strncmp(key, "ACTION=", 7) == 0)
@@ -144,14 +147,14 @@ static struct udevd_uevent_msg *get_msg_from_envbuf(const char *buf, int buf_siz
 	msg->envp[i] = NULL;
 
 	if (msg->devpath == NULL || msg->action == NULL) {
-		SDEBUGOUT("DEVPATH or ACTION missing, ignore message\r\n");
+		DEBUG("DEVPATH or ACTION missing, ignore message\r\n");
 		free(msg);
 		return NULL;
 	}
 	return msg;
 }
 
-static int handleStoragePlug(struct udevd_uevent_msg *msg)
+static int32_t handleStoragePlug(struct udevd_uevent_msg *msg)
 {
 	int countTime = 0;
 	uint32_t sendCount=0;
@@ -191,7 +194,7 @@ static int handleStoragePlug(struct udevd_uevent_msg *msg)
 			eventConf.eventPhoneCall(1, msg->devname);
 		}	
 	}else if(!strcasecmp(msg->action, STOR_STR_REM)){
-		SDEBUGOUT("Remove Device [%s/%s] From Storage List\r\n", 
+		DEBUG("Remove Device [%s/%s] From Storage List\r\n", 
 					 msg->devname,  msg->devpath);		
 		char devbuf[128] = {0};
 		sprintf(devbuf, "/dev/%s", msg->devname);
@@ -211,7 +214,7 @@ static int handleStoragePlug(struct udevd_uevent_msg *msg)
 		/*Check dev can open*/
 		if((fd = open(devbuf, O_RDONLY)) < 0){
 			/*Remove ID*/
-			SDEBUGOUT("We Think it may be Remove action[%s]\r\n", msg->devname);
+			DEBUG("We Think it may be Remove action[%s]\r\n", msg->devname);
 			if(eventConf.eventPhoneCall){
 				eventConf.eventPhoneCall(0, msg->devname);
 			}
@@ -231,7 +234,7 @@ static int handleStoragePlug(struct udevd_uevent_msg *msg)
 	return 0;
 }
 
-static int handlePhonePlug(struct udevd_uevent_msg *msg)
+static int32_t handlePhonePlug(struct udevd_uevent_msg *msg)
 {
 	if(!msg){
 		return -1;
@@ -260,7 +263,7 @@ static int handlePhonePlug(struct udevd_uevent_msg *msg)
 	return 0;
 }
 
-static int handlePlug(int sockfd)
+static int32_t handlePlug(int sockfd)
 {
 	char buffer[UEVENT_BUFFER_SIZE*2] = {0};
 	struct udevd_uevent_msg *msg;
@@ -363,12 +366,10 @@ void* vs_eventFunc(void *pvParameters)
 }
 
 
-static usEventArg eventConf;
-
-uint8_t usEvent_init(usEventArg *evarg)
+int32_t usEvent_init(struct usEventArg *evarg)
 {
 	if(evarg){
-		memcpy(&eventConf, evarg, sizeof(usEventArg));
+		memcpy(&eventConf, evarg, sizeof(struct usEventArg));
 	}
 
 	return EUSTOR_OK;

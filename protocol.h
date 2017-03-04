@@ -239,12 +239,6 @@ struct operation_list{
 	char basedir[MAX_PATH_SIZE]; /*dir name*/
 }__attribute__((__packed__));
 
-struct operation_listResponse{
-	int32_t fileNum;	/*file number*/	
-	int8_t finish;	/*finish or not*/
-	struct fileinfo fileList[];	/*file struct list*/
-}__attribute__((__packed__));
-
 /*File info sturct used for list response*/
 struct fileinfo{
 	char name[MAX_FILENAME_SIZE];/*file name*/
@@ -252,6 +246,12 @@ struct fileinfo{
 	int32_t  actime;	/*access time*/
 	int32_t  modtime;	/*modify time*/
 	int64_t  size;	/*file size, it is 0 when it's dir*/
+}__attribute__((__packed__));
+
+struct operation_listResponse{
+	int32_t fileNum;	/*file number*/	
+	int8_t finish;	/*finish or not*/
+	struct fileinfo fileList[];	/*file struct list*/
 }__attribute__((__packed__));
 
 

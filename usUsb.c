@@ -103,12 +103,13 @@ int32_t usUsb_SetDeviceConfigDescriptor(void *osPriv, uint8_t cfgindex)
 int32_t usUsb_BlukPacketReceive(usbInfo *usbDev, uint8_t *buffer, 
 										uint32_t length, uint32_t *aLength, int timeout)
 {
-	int8_t rc;
+	int32_t rc;
 	int transferred = 0;
 
-	if(!usbDev || !buffer || !aLength){
+	if(!usbDev || !usbDev->osPriv || !buffer || !aLength){
 		return EUSTOR_ARG;
 	}
+
 	rc = libusb_bulk_transfer((struct libusb_device_handle *)(usbDev->osPriv),
 								usbDev->ep_in,
 								buffer,
@@ -139,11 +140,11 @@ int32_t usUsb_BlukPacketReceive(usbInfo *usbDev, uint8_t *buffer,
 int32_t usUsb_BlukPacketSend(usbInfo *usbDev, uint8_t *buffer, 
 										uint32_t length, uint32_t *aLength, int timeout)
 {
-	int8_t rc;
+	int32_t rc;
 	int transferred = 0;
 	uint32_t already = 0, sndlen;
 	
-	if(!usbDev){
+	if(!usbDev || !usbDev->osPriv){
 		return EUSTOR_ARG;
 	}
 	if(length == 0){

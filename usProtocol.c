@@ -181,8 +181,8 @@ static uint16_t find_sport(void)
 static int32_t itunes_InterMemSendPacket(mux_itunes *iosDev, enum mux_protocol proto, 
 								void *header, const void *data, int length)
 {
-	int hdrlen;
-	int res;	
+	int32_t hdrlen;
+	int32_t res;	
 	uint32_t trueSend = 0;
 
 	if(!iosDev){
@@ -257,8 +257,8 @@ static int32_t itunes_SendPacket(mux_itunes *iosDev, enum mux_protocol proto,
 							void *header, const void *iosHeaderAddress, const void *payload, int length)
 {
 	uint32_t trueSend = 0;
-	int hdrlen;
-	int res;
+	int32_t hdrlen;
+	int32_t res;
 	struct mux_header *mhdr =NULL;
 	uint8_t *ptrpay = NULL;
 
@@ -354,7 +354,7 @@ static int32_t itunes_SendTCP(mux_itunes *iosDev, uint8_t flags,
 	struct mux_header *mhdr =NULL;	
 	uint32_t trueSend = 0;	
 	uint8_t *ptrpay = NULL;
-	int res;
+	int32_t res;
 
 	if(!iosDev){
 		return EUSTOR_ARG;
@@ -399,7 +399,7 @@ static int32_t itunes_SendTCP(mux_itunes *iosDev, uint8_t flags,
 	th->th_seq = htonl(iosDev->tx_seq);
 	th->th_ack = htonl(iosDev->tx_ack);
 	th->th_flags = flags;
-	th->th_off = sizeof(th) / 4;
+	th->th_off = sizeof(struct tcphdr) / 4;
 	th->th_win = htons(iosDev->tx_win >> 8);
 	
 	/*judge iosHeaderAddress is equal payload*/
@@ -415,7 +415,7 @@ static int32_t itunes_SendTCP(mux_itunes *iosDev, uint8_t flags,
 			DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
 								mux_header_size + hdrlen, trueSend, res);
 			return res;
-		}		
+		}
 		ptrpay = (uint8_t*)payload;
 		total = length;
 	}
@@ -449,7 +449,7 @@ static int32_t itunes_getIOSProVersion(mux_itunes *iosDev)
 	uint8_t mux_header_size; 
 	uint8_t cbuffer[512] = {0};
 	uint32_t trueRecv = 0;
-	int res;
+	int32_t res;
 	struct mux_header *itunesHeader = NULL;
 	
 	if(!iosDev){
@@ -542,7 +542,7 @@ static int32_t itunes_ReceiveAck(mux_itunes *iosDev)
 	uint8_t *payload = NULL;
 	uint32_t payload_length, actual_length;
 	struct tcphdr *th;
-	int res;
+	int32_t res;
 	
 	if(!iosDev){
 		return EUSTOR_ARG;
@@ -585,7 +585,7 @@ static int32_t itunes_ReceiveAck(mux_itunes *iosDev)
 
 static void itunes_ResetReceive(mux_itunes *iosDev)
 {
-	uint8_t rc;
+	int32_t rc;
 
 	if(!iosDev){
 		return ;
@@ -638,7 +638,7 @@ static int32_t aoa_SendProPackage(usbInfo *aoaDev, void *buffer, uint32_t size)
 	uint32_t actual_length = 0;
 	uint32_t already = 0;
 	uint8_t *curBuf = NULL;
-	uint8_t rc;
+	int32_t rc;
 
 	if(!buffer || !size){
 		DEBUG("usUsb_BlukPacketSend Error Parameter:%p Size:%d\r\n", 
@@ -672,7 +672,7 @@ static int32_t aoa_SendProPackage(usbInfo *aoaDev, void *buffer, uint32_t size)
 static int32_t aoa_RecvProPackage(usbInfo *aoaDev, uint8_t* buffer, 
 										uint32_t tsize, uint32_t *rsize)
 {
-	uint8_t rc;
+	int32_t rc;
 	
 	if(!aoaDev || !buffer || !buffer || !rsize){
 		return EUSTOR_ARG;
@@ -697,7 +697,7 @@ static int32_t itunes_SendProPackage(mux_itunes *iosDev, void *buffer, uint32_t 
 {	
 	uint8_t *tbuffer = (uint8_t *)buffer;
 	uint32_t  sndSize = 0, curSize = 0, rx_win = 0;
-	int res, headOffset = 0;
+	int32_t res, headOffset = 0;
 	
 	if(!buffer || !size || !iosDev){
 		return EUSTOR_ARG;
@@ -745,7 +745,7 @@ static int32_t itunes_RecvProPackage(mux_itunes *iosDev, uint8_t* buffer,
 	uint8_t *payload = NULL;	
 	uint32_t actual_length = 0, avalen, packageTotal = 0, packageCurrent;
 	uint32_t payload_length;
-	uint8_t rc;
+	int32_t rc;
 	
 	if(!iosDev || !buffer || !rsize){
 		return EUSTOR_ARG;
@@ -821,7 +821,7 @@ static int32_t itunes_RecvProPackage(mux_itunes *iosDev, uint8_t* buffer,
 		DEBUG("Connection Reset:\n");
 		usUsb_PrintStr(payload, payload_length);
 		itunes_ResetReceive(iosDev);
-		return EUSTOR_PRO_PACKAGE;
+		return EUSTOR_PRO_REFUSE;
 	}
 
 	if(payload_length){
@@ -845,7 +845,7 @@ static int32_t LINUX_ConnectIOSPhone(mux_itunes *iosInfo)
 	uint32_t trueRecv = 0;
 	struct tcphdr *th;
 	uint8_t cbuffer[512] = {0};
-	int res;
+	int32_t res;
 
 	if(!iosInfo){
 		return EUSTOR_ARG;
@@ -955,7 +955,7 @@ static int32_t LINUX_USBPowerControl(USBPowerValue value)
 
 static int32_t LINUX_SwitchAOAMode(libusb_device* dev, struct accessory_t aoaConfig)
 {
-	int res=-1, j;
+	int32_t res=-1, j;
 	libusb_device_handle *handle;
 	struct libusb_config_descriptor *config;
 	uint8_t version[2];
@@ -1134,7 +1134,7 @@ int32_t usProtocol_init(usConfig *conf)
 
 int32_t usProtocol_PhoneDetect(usPhoneinfo *phone)
 {
-	int cnt, i, res, j;
+	int32_t cnt, i, res, j;
 	libusb_device **devs;	
 	int8_t PhoneType = -1;
 	usbInfo phoneTmp;
@@ -1255,8 +1255,8 @@ int32_t usProtocol_PhoneDetect(usPhoneinfo *phone)
 					  (intf->endpoint[0].bEndpointAddress & 0x80) == LIBUSB_ENDPOINT_IN){
 
 				phoneTmp.interface=intf->bInterfaceNumber;
-				phoneTmp.ep_out = intf->endpoint[0].bEndpointAddress;
-				phoneTmp.ep_in = intf->endpoint[1].bEndpointAddress;
+				phoneTmp.ep_out = intf->endpoint[1].bEndpointAddress;
+				phoneTmp.ep_in = intf->endpoint[0].bEndpointAddress;
 
 				DEBUG("Found interface %d with swapped endpoints %02x/%02x for device %d-%d\n", 
 							phoneTmp.interface, phoneTmp.ep_out, phoneTmp.ep_in, bus, address);
@@ -1348,7 +1348,6 @@ void usProtocol_PhoneRelease(usPhoneinfo *phone)
 		dev = (libusb_device_handle* )phone->phoneInfo.phoneIOS.usbIOS.osPriv;
 		intface = phone->phoneInfo.phoneIOS.usbIOS.interface;
 	}else{
-		DEBUG("Unknown Type===>%d\r\n", phone->phoneType);		
 		memset(phone, 0, sizeof(usPhoneinfo));
 		return;
 	}

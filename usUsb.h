@@ -175,7 +175,7 @@ typedef struct  {
 	uint8_t bus, address;
 	uint16_t vid, pid;
 	uint8_t interface, ep_in, ep_out;
-	int wMaxPacketSize;
+	int32_t wMaxPacketSize;
 	void *osPriv;
 }usbInfo;
 

@@ -57,7 +57,7 @@ typedef struct{
 	uint16_t sport, dport;
 	uint32_t tx_seq, tx_ack, tx_acked, tx_win;
 	uint32_t rx_seq, rx_recvd, rx_ack, rx_win;
-	int flags;	
+	int32_t flags;	
 	usbInfo usbIOS;
 	uint8_t interBuf[IOS_INTERBUF_SIZE]; /*Internel buffer, used for small data send/receive*/
 }mux_itunes;

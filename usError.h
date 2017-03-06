@@ -39,6 +39,8 @@ extern "C" {
 	#define EUSTOR_PRO_PROVER	20173007 /*package protocol version Error*/
 	#define EUSTOR_PRO_REVACK	20173008
 	#define EUSTOR_PRO_PACKAGE	20173009
+	#define EUSTOR_PRO_REFUSE	20173010	/*connection refuse just for ios*/
+
 
 #ifdef __cplusplus
 }

@@ -81,7 +81,7 @@ int32_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE],
 						void *buff, int64_t offset, int32_t size)
 {
 	int fd;
-	int already = 0, res;
+	int32_t already = 0, res;
 
 	if(strlen(filename)==0 || !buff || !size){
 		DEBUG("Argument Error\n");

@@ -184,14 +184,14 @@ static int32_t usStorage_RecvPackage(usPhoneinfo *phoneDev, uint8_t *buffer,
 		return res;
 	}
 	headMagic = *((int32_t*)buffer);
-	DEBUG("Protocol Magic is %d  [Receive %u Bytes]\n", headMagic, paySize);
+	DEBUG("Protocol Magic is 0x%0x  [Receive %u Bytes]\n", headMagic, paySize);
 	if(headMagic == PRO_BASIC_MAGIC){
 		*recvSize = paySize;		
 		DEBUG("Request Protocol Magic, Request Receive Finish[%dBytes]\n", *recvSize);
 		return EUSTOR_OK;
 	}
 	if(headMagic != PRO_FSONDEV_MAGIC){
-		DEBUG("Unknown Magic :%u\n", headMagic);
+		DEBUG("Unknown Magic :0x%0x\n", headMagic);
 		*recvSize = 0;
 		return EUSTOR_OK;
 	}
@@ -296,6 +296,7 @@ int main(int argc, char **argv)
 	volatile static uint8_t conState = CON_INIT;
 	uint32_t truRecvSize;	
 	struct usEventArg eventarg;
+	int32_t res;
 	
 	DEBUG("uStorage Filesystem on Device Running[%s %s].\n", __DATE__, __TIME__);
 
@@ -337,27 +338,45 @@ int main(int argc, char **argv)
 			}else{
 				/*Connect to Phone Failed*/
 				usleep(300000);
-				continue;
+				goto loop_next;
 			}
 		}
 
-		if(usStorage_RecvPackage(&(usContext.phone), 
-					usContext.uspayload, usContext.uspaylen, &truRecvSize) != EUSTOR_OK){
-			DEBUG("RecvPackage Error\n");
-			conState == CON_CNTING;
+		if((res = usStorage_RecvPackage(&(usContext.phone), 
+					usContext.uspayload, usContext.uspaylen, &truRecvSize)) != EUSTOR_OK){
+			if(res == EUSTOR_USB_TIMEOUT){
+				continue;
+			}else if(res == EUSTOR_PRO_REFUSE){		
+				conState = CON_CNTING;
+			}else{
+				DEBUG("Maybe Offline....\n");
+				conState = CON_INIT;
+				usProtocol_PhoneRelease(&(usContext.phone));				
+				usleep(500000);
+			}
 			goto loop_next;
 		}
-		if(truRecvSize && usStorage_ProtocolHandle(&(usContext.phone), 
-						usContext.uspayload, usContext.uspaylen, truRecvSize) != EUSTOR_OK){
-			DEBUG("RecvPackage Error\n");
-			conState == CON_CNTING;
+
+		if(truRecvSize && (res = usStorage_ProtocolHandle(&(usContext.phone), 
+						usContext.uspayload, usContext.uspaylen, truRecvSize)) != EUSTOR_OK){
+			if(res == EUSTOR_USB_TIMEOUT){
+				DEBUG("Something Error[Package Not Handle Complete]\n");
+			}else if(res == EUSTOR_PRO_REFUSE){		
+				conState = CON_CNTING;
+			}else{
+				DEBUG("Maybe Offline....\n");
+				conState = CON_INIT;
+				usProtocol_PhoneRelease(&(usContext.phone));
+				usleep(500000);
+			}
 			goto loop_next;
 		}		
 
 	loop_next:		
 		if(phonePlugin == 0){
+			DEBUG("Loop Found Device Out..\n");
 			usProtocol_PhoneRelease(&(usContext.phone));			
-			conState == CON_INIT;
+			conState = CON_INIT;
 		}
 	}
 }

@@ -205,15 +205,20 @@ int32_t usDisk_diskLun(void *buff, int32_t size, int32_t *used)
 {
 	int res;
 
+	pthread_mutex_lock(&rlock);
 	res = disk_getdisk_lun(buff, size, used);
+	pthread_mutex_unlock(&rlock);
 	return ((res == DISK_SUCCESS)?EUSTOR_OK:EUSTOR_DISK_LUN);	
 }
 
 int32_t usDisk_diskInfo(void *buff, int32_t size, int32_t *used)
 {
 	int res;
-
+	
+	pthread_mutex_lock(&rlock);
 	res = disk_getdisk_info(buff, size, used);
+	pthread_mutex_unlock(&rlock);
+	
 	return ((res == DISK_SUCCESS)?EUSTOR_OK:EUSTOR_DISK_LUN);	
 }
 

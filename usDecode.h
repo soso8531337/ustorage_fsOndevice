@@ -26,8 +26,9 @@ int32_t usDecode_CreateHandle(uStorPro_fsOnDev *proHeader, uint8_t *creatPtr, ui
 int32_t usDecode_DeleteHandle(uStorPro_fsOnDev *proHeader, uint8_t *delPtr, uint32_t ptrLen);
 int32_t usDecode_MoveHandle(uStorPro_fsOnDev *proHeader, uint8_t *MovPtr, uint32_t ptrLen);
 
-
-
+int32_t readDirInvoke(void *arg, char *filename, int flag);
+int32_t usDecode_DiskLunHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *DiskPtr, uint32_t payLen);
+int32_t usDecode_DiskInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *DiskPtr, uint32_t payLen);
 
 
 

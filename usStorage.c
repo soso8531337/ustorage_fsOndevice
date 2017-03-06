@@ -263,11 +263,14 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 		usDecode_MoveHandle(proHeader, payload, paylength-headLen);	
 		sndSize = headLen;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_LIST){
-
+		usDecode_ListHandle(phoneDev, proHeader, payload, paylength-headLen);
+		return EUSTOR_OK;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_DISKINFO){
-
+		usDecode_DiskInfoHandle(proHeader, payload, paylength-headLen);		
+		sndSize = headLen+proHeader->len;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_DISKLUN){
-
+		usDecode_DiskLunHandle(proHeader, payload, paylength-headLen);		
+		sndSize = headLen+proHeader->len;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_FIRMWARE_INFO){
 
 	}else if(proHeader->ctrid == USTOR_FSONDEV_SAFEREMOVE){

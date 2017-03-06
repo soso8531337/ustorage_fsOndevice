@@ -51,6 +51,7 @@
         const typeof( ((type *)0)->member ) *__mptr = (ptr); \
         (type *)( (char *)__mptr - sys_offsetof(type,member) );})
 
+static pthread_mutex_t rlock = PTHREAD_MUTEX_INITIALIZER;
 
 
 int32_t usDisk_init(void)
@@ -74,7 +75,10 @@ void usDisk_PlugCallBack(int action, char *dev)
 	strcpy(raction.dev, dev);
 	raction.action = action;
 
-	disk_aciton_func(&raction);
+	/*We need to lock*/
+	pthread_mutex_lock(&rlock);
+	disk_aciton_func(&raction);	
+	pthread_mutex_lock(&rlock);
 }
 
 int32_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE], 
@@ -196,3 +200,51 @@ int32_t usDisk_diskCreate(char abspath[MAX_FILENAME_SIZE],
 	return EUSTOR_OK;
 }
 
+
+int32_t usDisk_diskLun(void *buff, int32_t size, int32_t *used)
+{
+	int res;
+
+	res = disk_getdisk_lun(buff, size, used);
+	return ((res == DISK_SUCCESS)?EUSTOR_OK:EUSTOR_DISK_LUN);	
+}
+
+int32_t usDisk_diskInfo(void *buff, int32_t size, int32_t *used)
+{
+	int res;
+
+	res = disk_getdisk_info(buff, size, used);
+	return ((res == DISK_SUCCESS)?EUSTOR_OK:EUSTOR_DISK_LUN);	
+}
+
+
+int32_t usDisk_diskList(char *dirname, readDirCallBack dirCallback, void *arg)
+{
+	DIR * dir;
+	struct dirent * ent;
+	char backfile[MAX_PATH_SIZE] = {0};
+	int32_t res;
+
+
+ 	dir = opendir(dirname);
+	if(dir == NULL){
+		DEBUG("OpenDir %s Failed:%s\n", dirname, strerror(errno));
+		return EUSTOR_DISK_LIST;
+	}
+
+	ent = readdir(dir);
+	while(ent){
+		if (*(ent->d_name) != '.') {
+			
+			memset(backfile, 0, MAX_PATH_SIZE); 			
+			snprintf(backfile, MAX_PATH_SIZE-1, "%s/%s", dirname, ent->d_name);			
+			DEBUG("List File:%s\n", backfile);
+			if((res = dirCallback(arg, backfile, 0)) != EUSTOR_OK){
+				return res;
+			}			
+		}
+	}
+	closedir(dir);
+	
+	return dirCallback(arg, NULL, 1);
+}

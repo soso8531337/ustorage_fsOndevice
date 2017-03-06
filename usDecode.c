@@ -36,6 +36,7 @@
 #include "usUsb.h"
 #include "protocol.h"
 #include "usSys.h"
+#include "usProtocol.h"
 
 
 int32_t usDecode_BasicMagicHandle(struct uStorPro_headInfo *proHeader)
@@ -201,4 +202,174 @@ int32_t usDecode_MoveHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *MovPtr,
 	}
 	
 	return EUSTOR_OK;
+}
+
+int32_t usDecode_DiskLunHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *DiskPtr, uint32_t payLen)
+{
+	if(!proHeader || !DiskPtr){		
+		proHeader->len = 0;
+		proHeader->relag = USTOR_EERR;
+		return EUSTOR_ARG;
+	}
+	
+	if(proHeader->version == PRO_FSONDEV_VER1){
+		DEBUG("Disk Lun Operation\n");
+		if(usDisk_diskLun(DiskPtr, payLen, &(proHeader->len)) != EUSTOR_OK){
+			DEBUG("Get Disk Lun Failed\n");		
+			proHeader->relag = USTOR_EERR;			
+			proHeader->len = 0;
+		}
+	}else{
+		DEBUG("UnSupport Version:%d\n", proHeader->version);
+		proHeader->len = 0;
+		proHeader->relag = USTOR_EERR;
+	}
+	
+	return EUSTOR_OK;
+}
+
+int32_t usDecode_DiskInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *DiskPtr, uint32_t payLen)
+{
+	if(!proHeader || !DiskPtr){		
+		proHeader->len = 0;
+		proHeader->relag = USTOR_EERR;
+		return EUSTOR_ARG;
+	}
+
+	if(proHeader->version == PRO_FSONDEV_VER1){
+		DEBUG("Disk Info Operation\n");
+		if(usDisk_diskInfo(DiskPtr, payLen, &(proHeader->len)) != EUSTOR_OK){
+			DEBUG("Get Disk Info Failed\n");		
+			proHeader->relag = USTOR_EERR;			
+			proHeader->len = 0;
+		}
+	}else{
+		DEBUG("UnSupport Version:%d\n", proHeader->version);
+		proHeader->len = 0;
+		proHeader->relag = USTOR_EERR;
+	}
+
+	return EUSTOR_OK;
+}
+
+
+
+struct listCallback{
+	uint8_t *buffer;
+	uint32_t size;
+	uint32_t usedsize;
+	void *proHeader;
+	void *phoneDev;
+};
+
+int32_t readDirInvoke(void *arg, char *filename, int flag)
+{
+	struct listCallback *listInvoke = (struct listCallback *)arg;
+	struct operation_listResponse *listhdr;
+	struct fileinfo *fileInfo;
+	char *ptrFlag = NULL;
+	int32_t res;
+
+	if(!listInvoke){
+		return EUSTOR_ARG;
+	}
+
+	listhdr = (struct operation_listResponse *)listInvoke->buffer;
+
+	if(filename == NULL && flag == 1){
+		goto listFin;
+	}
+
+
+	if(listInvoke->size-listInvoke->usedsize < sizeof(struct fileinfo)){
+		DEBUG("Buffer is Full, need Send it immediately\n");
+		listhdr->finish = flag;
+		if((res = usProtocol_SendPackage((usPhoneinfo *)(listInvoke->phoneDev), 
+				listInvoke->proHeader, listInvoke->usedsize+PRO_HDR_SZIE) != EUSTOR_OK)){
+			return res;
+		}
+		if(flag == 1){
+			DEBUG("Send List Finish\n");
+			return EUSTOR_OK;
+		}
+		listInvoke->usedsize = 0;
+	}
+
+	struct stat st;
+	memset(&st, 0, sizeof(struct stat));
+	if(stat(filename, &st)!= 0){
+		DEBUG("Stat %s Failed:%s\n", filename, strerror(errno));
+		struct uStorPro_fsOnDev *proHdr= (struct uStorPro_fsOnDev *)listInvoke->proHeader;
+		
+		proHdr->relag =1;
+		return usProtocol_SendPackage((usPhoneinfo *)(listInvoke->phoneDev), 
+				listInvoke->proHeader, PRO_HDR_SZIE);
+	}
+	
+	if(listInvoke->usedsize == 0){
+		DEBUG("First Element..\n");
+		listhdr->fileNum = 0;
+		listInvoke->usedsize = sizeof(struct operation_listResponse);
+	}
+	fileInfo = (struct fileinfo*)(listInvoke->buffer+listInvoke->usedsize);
+	ptrFlag = strrchr(filename, '/');
+	if(ptrFlag == NULL){
+		strcpy(fileInfo->name, filename);
+	}else{
+		strcpy(fileInfo->name, ptrFlag+1);
+	}
+	fileInfo->actime =st.st_atime;
+	fileInfo->modtime = st.st_mtime;
+	if(S_ISDIR(st.st_mode)){
+		fileInfo->isdir= 1;
+	}else{
+		fileInfo->isdir= 0;
+	}
+	fileInfo->size = st.st_size;
+	
+	listhdr->fileNum++;
+	
+	listInvoke->usedsize += sizeof(struct fileinfo);
+
+
+listFin:
+	if(flag == 1){
+		listhdr->finish = flag;
+		if(!listInvoke->usedsize){
+			listhdr->fileNum = 0;
+		}
+		
+		DEBUG("Last Part To Send List[%dFiles]\n", listhdr->fileNum);	
+		return usProtocol_SendPackage((usPhoneinfo *)(listInvoke->phoneDev), 
+				listInvoke->proHeader, listInvoke->usedsize+PRO_HDR_SZIE);
+	}
+
+	return EUSTOR_OK;
+}
+
+int32_t usDecode_ListHandle(usPhoneinfo *phoneDev, struct uStorPro_fsOnDev *proHeader, 
+						uint8_t *listPtr, uint32_t ptrLen)
+{
+	struct listCallback listcall;
+	char filename[MAX_PATH_SIZE] = {0};
+	struct stat st;
+
+	
+	memcpy(filename, listPtr, MAX_PATH_SIZE);
+	memset(&st, 0, sizeof(struct stat));
+	if(stat(filename, &st)!= 0 || !S_ISDIR(st.st_mode) ||
+			opendir(filename) == NULL){
+		DEBUG("%s is Not Dir\n", filename);
+		proHeader->relag =1;
+		return usProtocol_SendPackage(phoneDev, (void*)proHeader, PRO_HDR_SZIE);
+	}
+	
+	listcall.buffer = listPtr;
+	listcall.size = ptrLen;
+	listcall.usedsize = 0;
+	listcall.proHeader = (void*)proHeader;
+	listcall.phoneDev= (void*)phoneDev;
+
+	DEBUG("List ----->%s\n", filename);
+	return usDisk_diskList(filename, readDirInvoke, (void*)&listcall);	
 }

@@ -28,6 +28,8 @@ extern "C" {
 	#define EUSTOR_DISK_READ	20172004
 	#define EUSTOR_DISK_WRITE	20172005
 	#define EUSTOR_DISK_CREATE	20172006
+	#define EUSTOR_DISK_LUN		20172007
+	#define EUSTOR_DISK_LIST 	20172008
 	
 	/*ustorage protocol releative error from 20173000*/
 	#define EUSTOR_PRO_LIST		20173001

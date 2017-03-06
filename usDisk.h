@@ -19,6 +19,7 @@
 extern "C" {
 #endif
 
+typedef int (*readDirCallBack)(void *arg, char *filename, int flag);
 
 int32_t usDisk_init(void);
 void usDisk_PlugCallBack(int action, char *dev);
@@ -30,6 +31,8 @@ int32_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE],
 
 int32_t usDisk_diskCreate(char abspath[MAX_FILENAME_SIZE], 
 						int8_t isdir, int32_t actime, int32_t modtime);
+
+int32_t usDisk_diskList(char *dirname, readDirCallBack dirCallback, void *arg);
 
 #ifdef __cplusplus
 }

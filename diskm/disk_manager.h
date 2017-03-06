@@ -90,6 +90,7 @@ typedef struct _disk_disklist_t{
 
 int disk_init(void);
 int disk_aciton_func(udev_action *action);
-int disk_getlist();
+int disk_getdisk_lun(void *buff, int size, int *used);
+int disk_getdisk_info(void *buff, int size, int *used);
 
 #endif

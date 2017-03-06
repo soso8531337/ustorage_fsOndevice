@@ -9,6 +9,7 @@
 #include "sg_io.h"
 #define _GNU_SOURCE    /* or _SVID_SOURCE or _BSD_SOURCE */
 #include <mntent.h>
+#include "protocol.h"
 
 
 #define MMCBLK_MAX_PART	8
@@ -124,6 +125,7 @@ typedef struct _disk_maininfo_t{
 	int partnum; //more than 0
 	int isgpt;
 	int speed;
+	int plugcount;
 	struct list_head partlist;
 }disk_maininfo_t;
 
@@ -145,6 +147,7 @@ typedef struct _duser_list{
 
 char mnt_preffix[DMID_STR];
 
+static unsigned int plugcount = 0;
 static disk_info_t *i4disk = NULL;
 
 
@@ -1097,6 +1100,7 @@ int disk_insert_partition_list(disk_info_t *pdisk, disk_baseinfo_t* pinfo)
 		dmain->info.major = pinfo->major;
 		dmain->info.minor = pinfo->minor;
 		dmain->info.total = pinfo->total;
+		dmain->plugcount = plugcount++;
 		if(type == DISK_USB_MAIN){
 			strcpy(dmain->type, "USB");
 		}else{
@@ -1155,10 +1159,10 @@ int disk_mnt1_loop_partition(disk_info_t *pdisk, char *spedev)
         int ret;
 	disk_baseinfo_t dinfo;
 	
-	if(!pdisk){
-		DISKCK_DBG("Please INIT disk structure...\n");
-		return DISK_FAILURE;
-	}
+		if(!pdisk){
+			DISKCK_DBG("Please INIT disk structure...\n");
+			return DISK_FAILURE;
+		}
 
         if ((procpt = fopen(DISK_PROC_PARTITION, "r")) == NULL) {
                 DISKCK_DBG("Fail to fopen(%s)", DISK_PROC_PARTITION);
@@ -2009,3 +2013,118 @@ int disk_aciton_func(udev_action *action)
 	return udev_action_func(i4disk, action);
 }
 
+int disk_getdisk_lun(void *buff, int size, int *used)
+{
+	disk_maininfo_t *node, *_node;
+	int disknum = 0;
+	struct operation_diskLun *diskPtr = (struct operation_diskLun*)(buff);
+	int totalSize = size, nodeSize = sizeof(struct diskPlugNode);
+
+
+	if(!buff || !used || size < sizeof(struct operation_diskLun)){
+		return DISK_FAILURE;
+	}
+
+	totalSize -= sizeof(struct operation_diskLun);
+	struct diskPlugNode *diskNode = diskPtr->disks;
+	memset(buff, 0, size);
+	list_for_each_entry_safe(node, _node, &(i4disk->list), node){
+		if(node->status != DISK_MOUNTED){
+			DISKCK_DBG("Filter Not mounted disk---%s\n", node->info.devname);
+			continue;
+		}
+		if(totalSize < nodeSize){
+			DISKCK_DBG("Buffer is Full\n");
+			*used = size-totalSize;
+			return DISK_SUCCESS;
+		}
+		diskPtr->disknum++;
+		strncpy(diskNode->dev, node->info.devname, sizeof(diskNode->dev));
+		diskNode->seqnum = node->plugcount;
+		DISKCK_DBG("Found Disk:%s count=%d\n", diskNode->dev, diskNode->seqnum);
+		
+	}
+	*used = size-totalSize;
+
+	return DISK_SUCCESS;
+}	
+
+
+int disk_getdisk_info(void *buff, int size, int *used)
+{
+	disk_maininfo_t *node, *_node;	
+	disk_partinfo_t *pnode, *_pnode;
+	int disknum = 0;
+	struct operation_diskInfo *diskPtr = (struct operation_diskInfo*)(buff);
+	int totalSize = size, nodeSize = sizeof(struct diskInfoNode);
+
+	if(!buff || !used || size < sizeof(struct operation_diskInfo)){
+		return DISK_FAILURE;
+	}
+	totalSize -= sizeof(struct operation_diskInfo);
+	struct diskInfoNode *diskNode = diskPtr->diskInfos;
+	memset(buff, 0, size);
+
+	list_for_each_entry_safe(node, _node, &(i4disk->list), node){
+		if(node->status != DISK_MOUNTED){
+			DISKCK_DBG("Filter Not mounted disk---%s\n", node->info.devname);
+			continue;
+		}
+		if(totalSize < nodeSize){
+			DISKCK_DBG("Buffer is Full\n");
+			*used = size-totalSize;
+			return DISK_SUCCESS;
+		}
+		strncpy(diskNode->dev, node->info.devname, sizeof(diskNode->dev));
+		diskNode->totalSize = node->info.total;
+		diskNode->usedSize = node->info.used;
+		if(strstr(node->type, "SD")){
+			diskNode->type = 1;
+			diskNode->enablePlug = 1;
+		}else{
+			diskNode->type = 0;
+			diskNode->enablePlug = 0;
+		}
+		diskNode->partNum = node->partnum;
+
+		int i = 0;
+		list_for_each_entry_safe(pnode, _pnode, &(node->partlist), node){
+			/*Update storage information*/
+			if(pnode->mounted != 1){
+				DISKCK_DBG("Filter Not mounted partition---%s\n", pnode->info.devname);
+				continue;
+			}
+			if(i == MAX_PARTITIONS-1){
+				DISKCK_DBG("Partition BUffer overflow\n");
+				*used = size-totalSize;
+				return DISK_SUCCESS;
+			}
+			strncpy(diskNode->partitions[i].dev, pnode->info.devname, 16);
+			diskNode->partitions[i].totalSize = pnode->info.total;			
+			diskNode->partitions[i].usedSize= pnode->info.used;
+			strncpy(diskNode->partitions[i].mountDir, pnode->mntpoint, 63);
+			if(strcmp(pnode->fstype, "vfat") == 0||
+					strcmp(pnode->fstype, "fat32") == 0){
+				diskNode->partitions[i].fstype = 1;
+			}else if(strcmp(pnode->fstype, "exfat") == 0){
+				diskNode->partitions[i].fstype = 2;
+			}else if(strcmp(pnode->fstype, "ntfs") == 0){
+				diskNode->partitions[i].fstype = 3;
+			}else if(strncmp(pnode->fstype, "hfs", 3) == 0){
+				diskNode->partitions[i].fstype = 4;
+			}else{
+				DISKCK_DBG("Unknown filesystem (%s)", pnode->fstype);
+				diskNode->partitions[i].fstype = 0xFF;
+			}
+			DISKCK_DBG("Found Partition:%s fstype=%d\n",
+					diskNode->partitions[i].dev, diskNode->partitions[i].fstype);
+			i++;
+		}
+		
+		diskPtr->disknum++;
+	}
+	
+	*used = size-totalSize;
+
+	return DISK_SUCCESS;
+}

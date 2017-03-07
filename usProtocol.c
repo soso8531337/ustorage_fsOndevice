@@ -606,7 +606,7 @@ static void itunes_ResetReceive(mux_itunes *iosDev)
 			}else if(rc == EUSTOR_USB_TIMEOUT){
 				DEBUG("Reset Receive Package Finish[%d]\n", rc);
 			}	
-			return;
+			break;
 		}
 		struct mux_header *mhdr =  (struct mux_header *)rstbuf;
 		if (iosDev->version >= 2) {
@@ -629,6 +629,10 @@ static void itunes_ResetReceive(mux_itunes *iosDev)
 					iosDev->rx_seq, iosDev->rx_ack, th->th_flags, 
 					iosDev->rx_win, iosDev->rx_win >> 8, ntohl(mhdr->length));
 	}
+	
+	/*Reset sequence*/
+	iosDev->tx_seq = iosDev->tx_ack = iosDev->tx_acked = 0;
+	iosDev->rx_seq = iosDev->rx_ack = iosDev->rx_recvd = iosDev->rx_win = 0; 
 	DEBUG("Reset Finish iPhone Device[v/p=%d:%d]\r\n", 
 				iosDev->usbIOS.vid, iosDev->usbIOS.pid); 	
 }
@@ -903,8 +907,11 @@ static int32_t LINUX_ConnectIOSPhone(mux_itunes *iosInfo)
 			
 			if(th->th_flags != (TH_SYN|TH_ACK)) {
 				if(th->th_flags & TH_RST){
-					DEBUG("Connection refused by device(%d->%d)\r\n", 
+					DEBUG("Connection refused by device(%d->%d):", 
 								iosInfo->sport , iosInfo->dport);
+					usUsb_PrintStr((uint8_t *)(th+1),trueRecv-mux_header_size-sizeof(struct tcphdr));
+					iosInfo->tx_seq = iosInfo->tx_ack = iosInfo->tx_acked = 0;
+					iosInfo->rx_seq = iosInfo->rx_ack = iosInfo->rx_recvd = iosInfo->rx_win = 0;
 				}		
 				return EUSTOR_PRO_CONNECT;
 			} else {			

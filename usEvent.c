@@ -247,14 +247,14 @@ static int32_t handlePhonePlug(struct udevd_uevent_msg *msg)
 				msg->action, msg->devname, msg->devpath);
 		if(eventConf.phoneCall){
 			eventConf.phoneCall(1);
-		}		
+		}
 	}else if(!strcasecmp(msg->action, STOR_STR_REM)){
 
 		DEBUG("Phone PlugOUT %s [%s/%s] Event\r\n",
 				msg->action, msg->devname, msg->devpath);
 		if(eventConf.phoneCall){
 			eventConf.phoneCall(0);
-		}		
+		}
 	}else{
 		DEBUG("Phone Not Handle %s [%s] Event\r\n",
 				msg->action,  msg->devpath);		

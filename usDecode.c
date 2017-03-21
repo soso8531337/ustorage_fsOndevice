@@ -68,7 +68,7 @@ int32_t usDecode_ReadHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *readHea
 		int16_t pathlen = readInfo->pathlen;
 		strncpy(abspath, readInfo->abspath, pathlen);
 
-		DEBUG("Read Operation:\nName:%s\nSize:%d\nOffset:%ld\n", abspath, size, offset);
+		DEBUG("Read Operation:\nName:%s\nSize:%d\nOffset:%lld\n", abspath, size, offset);
 		
 		if(buffSize >= size&&
 				usDisk_diskRead(abspath, readHeader, offset, size) == EUSTOR_OK){
@@ -103,9 +103,9 @@ int32_t usDecode_WriteHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *writeH
 		int16_t pathlen = writeInfo->pathlen;
 		strncpy(abspath, writeInfo->abspath, pathlen);
 
-		DEBUG("Write Operation:\nName:%s\nSize:%d\nOffset:%ld\n", abspath, size, offset);
+		DEBUG("Write Operation:\nName:%s\nSize:%d\nOffset:%lld\n", abspath, size, offset);
 		
-		if(usDisk_diskRead(abspath, writeHeader+sizeof(struct operation_rw)+pathlen, 
+		if(usDisk_diskWrite(abspath, writeHeader+sizeof(struct operation_rw)+pathlen, 
 							offset, size) == EUSTOR_OK){
 			proHeader->len = 0;
 		}else{
@@ -370,6 +370,6 @@ int32_t usDecode_ListHandle(usPhoneinfo *phoneDev, struct uStorPro_fsOnDev *proH
 	listcall.proHeader = (void*)proHeader;
 	listcall.phoneDev= (void*)phoneDev;
 
-	DEBUG("List ----->%s\n", filename);
+	DEBUG("Buffer:%p Length:%d--List ----->%s\n", listcall.buffer, listcall.size, filename);
 	return usDisk_diskList(filename, readDirInvoke, (void*)&listcall);	
 }

@@ -137,7 +137,7 @@ int32_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE],
 		DEBUG("Argument Error\n");
 		return EUSTOR_ARG;
 	}
-	fd = open(filename, O_RDWR);
+	fd = open(filename, O_CREAT| O_RDWR, 0755);
 	if(fd < 0){
 		DEBUG("Open %s Error:%s\n", filename, strerror(errno));
 		return EUSTOR_DISK_OPEN;
@@ -169,20 +169,20 @@ int32_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE],
 
 int32_t usDisk_diskCreate(char abspath[MAX_FILENAME_SIZE], 
 						int8_t isdir, int32_t actime, int32_t modtime)
-{
-	int res;
-	
-	if(access(abspath, F_OK) == 0){
-		return EUSTOR_OK;
-	}
-	if(isdir){
-		res = mkdir(abspath, 0755);
-	}else{
-		res = creat(abspath, 0755);
-	}
-	if(res != 0){
-		DEBUG("Create Operation Error:%s[%s]\n", strerror(errno), abspath);
-		return EUSTOR_DISK_CREATE;
+{	
+	if(access(abspath, F_OK)){
+		if(isdir && mkdir(abspath, 0755)){
+			DEBUG("Create Operation Error:%s[%s]\n", strerror(errno), abspath);
+			return EUSTOR_DISK_CREATE;
+		}else if(isdir == 0){
+			int fd;
+			fd = open(abspath, O_CREAT|O_WRONLY, 0755);
+			if(fd < 0){
+				DEBUG("Create Operation Error:%s[%s]\n", strerror(errno), abspath);
+				return EUSTOR_DISK_CREATE;
+			}
+			close(fd);
+		}
 	}
 	/*set file attribute*/
 	if(actime && modtime){
@@ -248,6 +248,7 @@ int32_t usDisk_diskList(char *dirname, readDirCallBack dirCallback, void *arg)
 				return res;
 			}			
 		}
+		ent = readdir(dir);
 	}
 	closedir(dir);
 	

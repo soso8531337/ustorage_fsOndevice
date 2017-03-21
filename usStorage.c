@@ -189,6 +189,10 @@ static int32_t usStorage_RecvPackage(usPhoneinfo *phoneDev, uint8_t *buffer,
 		*recvSize = paySize;		
 		DEBUG("Request Protocol Magic, Request Receive Finish[%dBytes]\n", *recvSize);
 		return EUSTOR_OK;
+	}else if(headMagic == SCSI_PHONE_MAGIC){
+		*recvSize = paySize;		
+		DEBUG("Request Old Protocol DsiskLUN, Request Receive Finish[%dBytes]\n", *recvSize);
+		return EUSTOR_OK;
 	}
 	if(headMagic != PRO_FSONDEV_MAGIC){
 		DEBUG("Unknown Magic :0x%0x\n", headMagic);
@@ -203,7 +207,8 @@ static int32_t usStorage_RecvPackage(usPhoneinfo *phoneDev, uint8_t *buffer,
 	}
 	/*Receive full package*/
 	curSize = paySize;
-	totalSize = proHeader.len + PRO_HDR_SZIE;
+	totalSize = proHeader.len + PRO_HDR_SZIE;	
+	DEBUG("Request PartInfo[%d/%dBytes]\n", curSize, totalSize);
 	while(curSize < totalSize){
 		res = usProtocol_RecvPackage(phoneDev, buffer+curSize, bufSize-curSize, &paySize);
 		if(res != EUSTOR_OK){
@@ -242,6 +247,12 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 		baseHeader.relag = 0;
 		usDecode_BasicMagicHandle(&baseHeader);		
 		return usProtocol_SendPackage(phoneDev, (void*)&baseHeader, PRO_HDR_SZIE);
+	}else if(proHeader->head == SCSI_PHONE_MAGIC){
+		struct scsi_head ver1Header;
+
+		memcpy(&ver1Header, buffer, PRO_HDR_SZIE);
+		ver1Header.relag = 1;
+		return usProtocol_SendPackage(phoneDev, (void*)&ver1Header, PRO_HDR_SZIE);
 	}
 	payload = buffer+headLen;
 	if(proHeader->ctrid == USTOR_FSONDEV_READ){
@@ -263,7 +274,7 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 		usDecode_MoveHandle(proHeader, payload, paylength-headLen);	
 		sndSize = headLen;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_LIST){
-		usDecode_ListHandle(phoneDev, proHeader, payload, paylength-headLen);
+		usDecode_ListHandle(phoneDev, proHeader, payload, buffsize-headLen);
 		return EUSTOR_OK;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_DISKINFO){
 		usDecode_DiskInfoHandle(proHeader, payload, paylength-headLen);		

@@ -277,10 +277,10 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 		usDecode_ListHandle(phoneDev, proHeader, payload, buffsize-headLen);
 		return EUSTOR_OK;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_DISKINFO){
-		usDecode_DiskInfoHandle(proHeader, payload, paylength-headLen);		
+		usDecode_DiskInfoHandle(proHeader, payload, buffsize-headLen);		
 		sndSize = headLen+proHeader->len;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_DISKLUN){
-		usDecode_DiskLunHandle(proHeader, payload, paylength-headLen);		
+		usDecode_DiskLunHandle(proHeader, payload, buffsize-headLen);		
 		sndSize = headLen+proHeader->len;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_FIRMWARE_INFO){
 

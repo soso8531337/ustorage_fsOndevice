@@ -2123,6 +2123,12 @@ int disk_getdisk_info(void *buff, int size, int *used)
 		}
 		
 		diskPtr->disknum++;
+		totalSize -= sizeof(struct diskInfoNode);
+		DISKCK_DBG("DiskInfo:%s totalSize=%lld usedSize=%lld [Buffer:%p NextBuffer:%p Totalsize:%d]\n",
+				diskNode->dev, diskNode->totalSize, diskNode->usedSize, diskNode, diskNode+1, totalSize);
+		
+		/*Next Pointer*/
+		diskNode++;		
 	}
 	
 	*used = size-totalSize;

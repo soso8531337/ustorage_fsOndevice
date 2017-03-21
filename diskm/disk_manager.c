@@ -578,19 +578,19 @@ int check_commerical_driver(char *fstype, char *caldrv)
 	}else if(strncmp(fstype, "hfs", 3) == 0){
 		fsflag = "thfsplus";
 	}else{
-		DISKCK_DBG("Unknown filesystem (%s)", fstype);
+		DISKCK_DBG("Use Free filesystem (%s)\n", fstype);
 		return DISK_FAILURE;
 	}
-        if ((procpt = fopen(DISK_COMMERICAL_PATH, "r")) == NULL) {
-                DISKCK_DBG("Fail to fopen(%s)", DISK_COMMERICAL_PATH);
-		return DISK_FAILURE;
-        }
+    if ((procpt = fopen(DISK_COMMERICAL_PATH, "r")) == NULL) {
+            DISKCK_DBG("Fail to fopen(%s)", DISK_COMMERICAL_PATH);
+	return DISK_FAILURE;
+    }
 
-        while (fgets(line, sizeof(line), procpt) != NULL) {
-                memset(drver, 0, sizeof(drver));
-                if (sscanf(line, " %s %d",
-                                drver, &size) != 2)
-                        continue;
+    while (fgets(line, sizeof(line), procpt) != NULL) {
+	            memset(drver, 0, sizeof(drver));
+        if (sscanf(line, " %s %d",
+                        drver, &size) != 2)
+                continue;
 
 		if(strcmp(fsflag, drver) == 0){
 			strcpy(caldrv, drver);
@@ -599,7 +599,7 @@ int check_commerical_driver(char *fstype, char *caldrv)
 			return DISK_SUCCESS;
 		}
 		memset(line, 0, sizeof(line));
-        }
+    }
 	fclose(procpt);
 
 	return DISK_FAILURE;
@@ -1074,6 +1074,14 @@ int disk_insert_partition_list(disk_info_t *pdisk, disk_baseinfo_t* pinfo)
 		DISKCK_DBG("Unknow Disk Type %s\n", ptname);
 		return DISK_FAILURE;
 	}
+	/*Create Dev Node*/
+	memset(devbuf, 0, sizeof(devbuf));
+	sprintf(devbuf, "/dev/%s", pinfo->devname);
+	if(access(devbuf, F_OK) != 0){
+		DISKCK_DBG("Create Node %s", devbuf);
+		mknod(devbuf, S_IFBLK|0600, 
+			makedev(pinfo->major, pinfo->minor));
+	}
 
 	dmain = disk_search_partition_list(pdisk, devname, 0);
 	if(type == DISK_USB_MAIN || 
@@ -1085,13 +1093,6 @@ int disk_insert_partition_list(disk_info_t *pdisk, disk_baseinfo_t* pinfo)
 		}
 		DISKCK_DBG("Insert Main Partition %s\n", devname);
 		
-		memset(devbuf, 0, sizeof(devbuf));
-		sprintf(devbuf, "/dev/%s", ptname);
-		if(access(devbuf, F_OK) != 0){
-			DISKCK_DBG("Create Node %s", devbuf);
-			mknod(devbuf, S_IFBLK|0600, 
-				makedev(pinfo->major, pinfo->minor));
-		}
 		dmain = calloc(1, sizeof(disk_maininfo_t));
 		if(!dmain){
 			return DISK_FAILURE;

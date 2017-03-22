@@ -883,6 +883,7 @@ int disk_fill_main_partition_baseinfo(disk_info_t *pdisk, disk_maininfo_t *mdisk
 			DISKCK_DBG("IOCTRL Get %s Capacity Failed, Give up\n", devbuf);
 		}
 	}
+	mdisk->info.used = 0;
 	/*Get disk speed*/
 	mdisk->speed = disk_get_usbspeed(&(pdisk->hubinfo), mdisk->info.devname);
 	/*Get disk pt*/
@@ -1335,6 +1336,8 @@ int disk_mnt3_automount_partition(disk_info_t *pdisk, char *spedev)
 				DISKCK_DBG("Mount %s Successful, Update Partition Capatibty\n",devbuf);
 				update_partition_capacity_rw(pnode);
 			}
+			/*update dev used capacity*/
+			node->info.used += pnode->info.used;
 			/*Notify to upnpd*/
 			disk_aciton_notify_upnp(pnode, DISK_UDEV_ADD, node->info.devname);	
 			
@@ -2043,7 +2046,12 @@ int disk_getdisk_lun(void *buff, int size, int *used)
 		strncpy(diskNode->dev, node->info.devname, sizeof(diskNode->dev));
 		diskNode->seqnum = node->plugcount;
 		DISKCK_DBG("Found Disk:%s count=%d\n", diskNode->dev, diskNode->seqnum);
-		
+
+		totalSize -= sizeof(struct diskPlugNode);
+		DISKCK_DBG("DiskLun:disknum:%d Dev:%s [Buffer:%p NextBuffer:%p Totalsize:%d]\n",
+					diskPtr->disknum, diskNode->dev, diskNode, diskNode+1, totalSize);
+
+		diskNode++;
 	}
 	*used = size-totalSize;
 
@@ -2076,9 +2084,10 @@ int disk_getdisk_info(void *buff, int size, int *used)
 			*used = size-totalSize;
 			return DISK_SUCCESS;
 		}
+		memset(diskNode, 0, sizeof(struct diskInfoNode));
 		strncpy(diskNode->dev, node->info.devname, sizeof(diskNode->dev));
 		diskNode->totalSize = node->info.total;
-		diskNode->usedSize = node->info.used;
+
 		if(strstr(node->type, "SD")){
 			diskNode->type = 1;
 			diskNode->enablePlug = 1;
@@ -2089,6 +2098,7 @@ int disk_getdisk_info(void *buff, int size, int *used)
 		diskNode->partNum = node->partnum;
 
 		int i = 0;
+		node->info.used = 0;
 		list_for_each_entry_safe(pnode, _pnode, &(node->partlist), node){
 			/*Update storage information*/
 			if(pnode->mounted != 1){
@@ -2103,6 +2113,7 @@ int disk_getdisk_info(void *buff, int size, int *used)
 			strncpy(diskNode->partitions[i].dev, pnode->info.devname, 16);
 			diskNode->partitions[i].totalSize = pnode->info.total;			
 			diskNode->partitions[i].usedSize= pnode->info.used;
+			node->info.used += pnode->info.used;
 			strncpy(diskNode->partitions[i].mountDir, pnode->mntpoint, 63);
 			if(strcmp(pnode->fstype, "vfat") == 0||
 					strcmp(pnode->fstype, "fat32") == 0){
@@ -2122,6 +2133,7 @@ int disk_getdisk_info(void *buff, int size, int *used)
 			i++;
 		}
 		
+		diskNode->usedSize = node->info.used;
 		diskPtr->disknum++;
 		totalSize -= sizeof(struct diskInfoNode);
 		DISKCK_DBG("DiskInfo:%s totalSize=%lld usedSize=%lld [Buffer:%p NextBuffer:%p Totalsize:%d]\n",

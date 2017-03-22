@@ -267,6 +267,7 @@ int32_t readDirInvoke(void *arg, char *filename, int flag)
 	struct listCallback *listInvoke = (struct listCallback *)arg;
 	struct operation_listResponse *listhdr;
 	struct fileinfo *fileInfo;
+	struct uStorPro_fsOnDev *proHeader = (struct uStorPro_fsOnDev *)(listInvoke->proHeader);
 	char *ptrFlag = NULL;
 	int32_t res;
 
@@ -282,8 +283,9 @@ int32_t readDirInvoke(void *arg, char *filename, int flag)
 
 
 	if(listInvoke->size-listInvoke->usedsize < sizeof(struct fileinfo)){
-		DEBUG("Buffer is Full, need Send it immediately\n");
+		DEBUG("Buffer is Full, need Send it immediately[Payload:%dBytes]\n", proHeader->len);
 		listhdr->finish = flag;
+		proHeader->len =listInvoke->usedsize; 
 		if((res = usProtocol_SendPackage((usPhoneinfo *)(listInvoke->phoneDev), 
 				listInvoke->proHeader, listInvoke->usedsize+PRO_HDR_SZIE) != EUSTOR_OK)){
 			return res;
@@ -302,6 +304,7 @@ int32_t readDirInvoke(void *arg, char *filename, int flag)
 		struct uStorPro_fsOnDev *proHdr= (struct uStorPro_fsOnDev *)listInvoke->proHeader;
 		
 		proHdr->relag =1;
+		proHeader->len = 0;
 		return usProtocol_SendPackage((usPhoneinfo *)(listInvoke->phoneDev), 
 				listInvoke->proHeader, PRO_HDR_SZIE);
 	}
@@ -338,8 +341,9 @@ listFin:
 		if(!listInvoke->usedsize){
 			listhdr->fileNum = 0;
 		}
-		
-		DEBUG("Last Part To Send List[%dFiles]\n", listhdr->fileNum);	
+		proHeader->len = listInvoke->usedsize;
+		DEBUG("Last Part To Send List[%dFiles Paylaod:%dBytes]\n", 
+							listhdr->fileNum, proHeader->len);	
 		return usProtocol_SendPackage((usPhoneinfo *)(listInvoke->phoneDev), 
 				listInvoke->proHeader, listInvoke->usedsize+PRO_HDR_SZIE);
 	}

@@ -325,8 +325,8 @@ int main(int argc, char **argv)
 	usProtocol_init(NULL);
 	usStorage_init();
 	usDisk_init();
-	eventarg.eventPhoneCall = usDisk_PlugCallBack;
-	eventarg.phoneCall = phoneCallBack;
+	eventarg.eventDiskCall = usDisk_PlugCallBack;
+	eventarg.eventPhoneCall = phoneCallBack;
 	usEvent_init(&eventarg);
 	
 	while(1){

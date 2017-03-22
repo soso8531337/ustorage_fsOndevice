@@ -74,11 +74,12 @@ void usDisk_PlugCallBack(int action, char *dev)
 	}
 	strcpy(raction.dev, dev);
 	raction.action = action;
+	raction.major = 0xFFFF;
 
 	/*We need to lock*/
 	pthread_mutex_lock(&rlock);
 	disk_aciton_func(&raction);	
-	pthread_mutex_lock(&rlock);
+	pthread_mutex_unlock(&rlock);
 }
 
 int32_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE], 

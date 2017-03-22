@@ -68,6 +68,7 @@ static int32_t initNetlinkSock(void)
 {
 	struct sockaddr_nl snl;
 	int retval, sockfd = -1, dev_fd;
+	char busloc[1024] = {0};
 
 	memset(&snl, 0x00, sizeof(struct sockaddr_nl));
 	snl.nl_family = AF_NETLINK;
@@ -87,7 +88,8 @@ static int32_t initNetlinkSock(void)
 		return -1;
 	}
 	/*Triger phone*/
-	if((dev_fd = open(PHONE_BUS_LOC, O_WRONLY)) < 0 ||
+	snprintf(busloc, sizeof(busloc)-1, "/sys/bus/usb/devices/%s/uevent", PHONE_BUS_LOC);
+	if((dev_fd = open(busloc, O_WRONLY)) < 0 ||
 			write(dev_fd, "add", 3) <= 0){
 		DEBUG("Write Failed[%s]...\n", strerror(errno));
 	}
@@ -190,16 +192,16 @@ static int32_t handleStoragePlug(struct udevd_uevent_msg *msg)
 		/*preread*/
 		DEBUG("ADD Device %d [%s/%s] To Storage List\r\n", 
 				msg->id, msg->devname,  msg->devpath);
-		if(eventConf.eventPhoneCall){
-			eventConf.eventPhoneCall(1, msg->devname);
+		if(eventConf.eventDiskCall){
+			eventConf.eventDiskCall(4, msg->devname);
 		}	
 	}else if(!strcasecmp(msg->action, STOR_STR_REM)){
 		DEBUG("Remove Device [%s/%s] From Storage List\r\n", 
 					 msg->devname,  msg->devpath);		
 		char devbuf[128] = {0};
 		sprintf(devbuf, "/dev/%s", msg->devname);
-		if(eventConf.eventPhoneCall){
-			eventConf.eventPhoneCall(0, msg->devname);
+		if(eventConf.eventDiskCall){
+			eventConf.eventDiskCall(5, msg->devname);
 		}	
 	}else if(!strcasecmp(msg->action, STOR_STR_CHANGE)){		
 		char devbuf[128] = {0};		
@@ -215,14 +217,14 @@ static int32_t handleStoragePlug(struct udevd_uevent_msg *msg)
 		if((fd = open(devbuf, O_RDONLY)) < 0){
 			/*Remove ID*/
 			DEBUG("We Think it may be Remove action[%s]\r\n", msg->devname);
-			if(eventConf.eventPhoneCall){
-				eventConf.eventPhoneCall(0, msg->devname);
+			if(eventConf.eventDiskCall){
+				eventConf.eventDiskCall(5, msg->devname);
 			}
 		}else{
 			close(fd);			
 			DEBUG("We Think it may be Add action[%s]\r\n", msg->devname);
-			if(eventConf.eventPhoneCall){
-				eventConf.eventPhoneCall(1, msg->devname);
+			if(eventConf.eventDiskCall){
+				eventConf.eventDiskCall(4, msg->devname);
 			}
 		}		
 	}else{
@@ -245,15 +247,15 @@ static int32_t handlePhonePlug(struct udevd_uevent_msg *msg)
 
 		DEBUG("Phone PlugIN %s [%s/%s] Event\r\n",
 				msg->action, msg->devname, msg->devpath);
-		if(eventConf.phoneCall){
-			eventConf.phoneCall(1);
+		if(eventConf.eventPhoneCall){
+			eventConf.eventPhoneCall(1);
 		}
 	}else if(!strcasecmp(msg->action, STOR_STR_REM)){
 
 		DEBUG("Phone PlugOUT %s [%s/%s] Event\r\n",
 				msg->action, msg->devname, msg->devpath);
-		if(eventConf.phoneCall){
-			eventConf.phoneCall(0);
+		if(eventConf.eventPhoneCall){
+			eventConf.eventPhoneCall(0);
 		}
 	}else{
 		DEBUG("Phone Not Handle %s [%s] Event\r\n",

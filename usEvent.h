@@ -13,11 +13,11 @@
 	 extern "C" {
 #endif
 
-typedef void (*eventDiskCall)(int);
-typedef void (*eventPhoneCall)(int, char *);
+typedef void (*eventPhoneCall)(int);
+typedef void (*eventDiskCall)(int, char *);
 
 struct usEventArg{
-	eventDiskCall phoneCall;
+	eventDiskCall eventDiskCall;
 	eventPhoneCall eventPhoneCall;
 };
 

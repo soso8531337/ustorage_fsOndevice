@@ -51,12 +51,31 @@
         const typeof( ((type *)0)->member ) *__mptr = (ptr); \
         (type *)( (char *)__mptr - sys_offsetof(type,member) );})
 
+
+static struct nofiyStruct notifyInfo;
 static pthread_mutex_t rlock = PTHREAD_MUTEX_INITIALIZER;
 
+
+int32_t usDisk_getNotifyInfo(struct nofiyStruct *notify)
+{
+	if(!notify){
+		return EUSTOR_ARG;
+	}
+	/*We need to lock*/
+	pthread_mutex_lock(&rlock);
+	if(notifyInfo.valid){
+		memcpy(notify, &notifyInfo, sizeof(struct nofiyStruct));
+		notifyInfo.valid = 0;
+	}
+	pthread_mutex_unlock(&rlock);
+
+	return EUSTOR_OK;
+}
 
 int32_t usDisk_init(void)
 {
 	disk_init();
+	memset(&notifyInfo, 0, sizeof(struct nofiyStruct));
 	return EUSTOR_OK;
 }
 
@@ -78,7 +97,14 @@ void usDisk_PlugCallBack(int action, char *dev)
 
 	/*We need to lock*/
 	pthread_mutex_lock(&rlock);
-	disk_aciton_func(&raction);	
+	if(disk_aciton_func(&raction) == DISK_SUCCESS){
+		notifyInfo.event = (action==4?DISK_PLUGIN:DISK_PLUGOUT);
+		strncpy(notifyInfo.dev, dev, sizeof(notifyInfo.dev)-1);
+		notifyInfo.invokTime = (int32_t)time(NULL);
+		notifyInfo.valid = 1;
+		DEBUG("Update Notify Info:%s/%s/%d\n", 
+				notifyInfo.dev, action==4?"plugIn":"plugOut", notifyInfo.invokTime);
+	}	
 	pthread_mutex_unlock(&rlock);
 }
 
@@ -208,6 +234,10 @@ int32_t usDisk_diskLun(void *buff, int32_t size, int32_t *used)
 
 	pthread_mutex_lock(&rlock);
 	res = disk_getdisk_lun(buff, size, used);
+	if(res == DISK_SUCCESS){
+		DEBUG("Reset Notify Info\n");
+		memset(&notifyInfo, 0, sizeof(struct nofiyStruct));
+	}	
 	pthread_mutex_unlock(&rlock);
 	return ((res == DISK_SUCCESS)?EUSTOR_OK:EUSTOR_DISK_LUN);	
 }
@@ -218,6 +248,10 @@ int32_t usDisk_diskInfo(void *buff, int32_t size, int32_t *used)
 	
 	pthread_mutex_lock(&rlock);
 	res = disk_getdisk_info(buff, size, used);
+	if(res == DISK_SUCCESS){
+		DEBUG("Reset Notify Info\n");
+		memset(&notifyInfo, 0, sizeof(struct nofiyStruct));
+	}
 	pthread_mutex_unlock(&rlock);
 	
 	return ((res == DISK_SUCCESS)?EUSTOR_OK:EUSTOR_DISK_LUN);	

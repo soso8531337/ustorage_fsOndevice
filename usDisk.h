@@ -19,9 +19,18 @@
 extern "C" {
 #endif
 
+#define DISK_PLUGIN		1
+#define DISK_PLUGOUT	0
+struct nofiyStruct{
+	uint8_t valid;
+	char dev[16];
+	uint8_t event;
+	int32_t invokTime;
+};
 typedef int (*readDirCallBack)(void *arg, char *filename, int flag);
 
 int32_t usDisk_init(void);
+int32_t usDisk_getNotifyInfo(struct nofiyStruct *notify);
 void usDisk_PlugCallBack(int action, char *dev);
 int32_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE], 
 						void *buff, int64_t offset, int32_t size);

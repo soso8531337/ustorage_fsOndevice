@@ -101,6 +101,7 @@ static int32_t daemonize(void)
 {
 	pid_t pid;
 	pid_t sid;
+	int i;
 
 	// already a daemon
 	if (getppid() == 1)
@@ -123,7 +124,8 @@ static int32_t daemonize(void)
 		DEBUG("setsid() failed.\r\n");
 		return -1;
 	}
-
+	for (i = getdtablesize(); i >= 0; --i)
+		close(i);
 	pid = fork();
 	if (pid < 0) {
 		DEBUG("fork() failed (second).\r\n");
@@ -295,6 +297,33 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 	return usProtocol_SendPackage(phoneDev, buffer, sndSize);
 }
 
+void usStorage_notifyPlug(usPhoneinfo *phoneDev)
+{
+	struct nofiyStruct event;
+	struct uStorPro_fsOnDev proHeader;
+	static int32_t dwtag = 0;
+
+	if(!phoneDev){
+		return;
+	}
+	event.valid = 0;
+	usDisk_getNotifyInfo(&event);
+	if(event.valid == 0){
+		return ;
+	}
+	memset(&proHeader, 0, sizeof(struct uStorPro_fsOnDev));
+	proHeader.head = PRO_REVER_MAGIC;
+	proHeader.version = 1;
+	proHeader.relag = 0;
+	proHeader.wtag = dwtag++;
+	proHeader.ctrid = USTOR_FSONDEV_DISKLUN;
+	proHeader.len = 0;
+
+	DEBUG("Notify To Peer:%s-%s[Now:%ld Trigger:%d]\n",
+				event.dev, event.event == DISK_PLUGIN?"PlugIn":"PlugOut", time(NULL), event.invokTime);
+	usProtocol_SendPackage(phoneDev, (void*)&proHeader, sizeof(proHeader));
+}
+
 void phoneCallBack(int state)
 {
 	phonePlugin = state;
@@ -359,7 +388,7 @@ int main(int argc, char **argv)
 		if((res = usStorage_RecvPackage(&(usContext.phone), 
 					usContext.uspayload, usContext.uspaylen, &truRecvSize)) != EUSTOR_OK){
 			if(res == EUSTOR_USB_TIMEOUT){
-				continue;
+				//continue;
 			}else if(res == EUSTOR_PRO_REFUSE){		
 				conState = CON_CNTING;
 			}else{
@@ -391,6 +420,9 @@ int main(int argc, char **argv)
 			DEBUG("Loop Found Device Out..\n");
 			usProtocol_PhoneRelease(&(usContext.phone));			
 			conState = CON_INIT;
+		}else if(conState == CON_CNTED){
+			/*Notify function*/
+			usStorage_notifyPlug(&(usContext.phone));
 		}
 	}
 }

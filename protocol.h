@@ -21,7 +21,6 @@
 #define PRO_HDR_SZIE				24
 #define PRO_BASIC_MAGIC				0xffeeffee	//this magic is used to get ustorage protocol info, device must support
 
-
 /*Basic protocol struct*/
 
 /*Used for request protocol magic*/
@@ -118,6 +117,7 @@ struct scsi_inquiry_info{
 /*Request == BasicProtocolHeader+SubOperationHeader*/
 
 #define PRO_FSONDEV_MAGIC	0xffeeff02		/*Begin from 0xffeeff00*/
+#define PRO_REVER_MAGIC				0x02ffeeff
 #define MAX_PATH_SIZE		4096
 #define MAX_FILENAME_SIZE	256
 #define MAX_PARTITIONS		6

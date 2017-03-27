@@ -53,9 +53,9 @@
 #include "usEvent.h"
 #include "usError.h"
 
-/*512 used for ios header offset, 24 used protocol header, 256K used for payload*/
+/*512 used for ios header offset, 24 used protocol header, 256K used for payload, 4096 for path name, 128 for other sturct size*/
 #define US_RESERVED_SIZE	512
-#define US_BUFFER_SIZE		(US_RESERVED_SIZE+24+256*1024) 
+#define US_BUFFER_SIZE		(US_RESERVED_SIZE+24+256*1024+4096+128) 
 
 enum connect_state {
 	CON_INIT=0,

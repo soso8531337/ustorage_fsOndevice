@@ -28,7 +28,7 @@
 #define DISK_MNT_PREFIX	"/data"
 #define DISK_MNT_DIR		"/etc/mnt_preffix"
 
-
+#define NTFS_3G_MOUNT		"ntfs-3g -o nls=utf8,umask=0000,fmask=0000,dmask=0000,recover,noatime,force %s %s"
 enum{
 	DISK_MMC_MAIN=1,
 	DISK_MMC_PART,
@@ -601,7 +601,12 @@ int check_commerical_driver(char *fstype, char *caldrv)
 		memset(line, 0, sizeof(line));
     }
 	fclose(procpt);
-
+	if(strcmp(fstype, "ntfs") == 0){
+		/*can not find ntfs commerial driver, used free ntfs-3g*/
+		strcpy(caldrv, "ntfs-3g");
+		DISKCK_DBG("Used Free Filesystem Driver (%s)\n", caldrv);
+		return DISK_SUCCESS;		
+	}
 	return DISK_FAILURE;
 }
 
@@ -1316,6 +1321,12 @@ int disk_mnt3_automount_partition(disk_info_t *pdisk, char *spedev)
 				pnode->mounted = 0;
 				continue;
 			}
+			if(!strcmp(pnode->fstype, "unknown")){
+				DISKCK_DBG("Ingore %s Fstype\n", pnode->fstype);
+				pnode->mounted = 0;
+				rmdir(pnode->mntpoint);
+				continue;
+			}
 			/*Get commerical filesystem driver*/
 			memset(fs, 0, sizeof(fs));
 			if(check_commerical_driver(pnode->fstype, fs) != DISK_SUCCESS){
@@ -1325,16 +1336,35 @@ int disk_mnt3_automount_partition(disk_info_t *pdisk, char *spedev)
 			if(generate_mount_parameter(&(pdisk->mnt_parameter), fs, parameter) != DISK_SUCCESS){
 				DISKCK_DBG("Get Mount Parameter Error:%s\n", pnode->info.devname);
 			}
-			ret = mount(devbuf, pnode->mntpoint , fs, 0,strlen(parameter)?parameter:"");
-			if(ret){
-				DISKCK_DBG("Mount Error: dev=%s mntpoint=%s fstype=%s option=%s![%s]\n", 
-						devbuf, pnode->mntpoint, fs, parameter, strerror(errno));
-				pnode->mounted = 0;
-				rmdir(pnode->mntpoint);
-				continue;
+
+			if(!strcmp(fs, "ntfs-3g")){
+				DISKCK_DBG("We Need to use command Mount Disk-ntfs3g\n");
+				char cmdbuf[4096] = {0};
+				sprintf(cmdbuf, NTFS_3G_MOUNT, devbuf, pnode->mntpoint);
+				system(cmdbuf);
+				usleep(300000);
+				DISKCK_DBG("CMD-->%s\n", cmdbuf);				
+				if(find_mount_point(devbuf)){
+					DISKCK_DBG("Mount %s Successful, Update Partition Capatibty\n",devbuf);
+					update_partition_capacity_rw(pnode);
+				}else{			
+					DISKCK_DBG("CMD Mount Error-->%s\n", cmdbuf);				
+					pnode->mounted = 0;
+					rmdir(pnode->mntpoint);
+					continue;
+				}				
 			}else{
-				DISKCK_DBG("Mount %s Successful, Update Partition Capatibty\n",devbuf);
-				update_partition_capacity_rw(pnode);
+				ret = mount(devbuf, pnode->mntpoint , fs, 0,strlen(parameter)?parameter:"");
+				if(ret){
+					DISKCK_DBG("Mount Error: dev=%s mntpoint=%s fstype=%s option=%s![%s]\n", 
+							devbuf, pnode->mntpoint, fs, parameter, strerror(errno));
+					pnode->mounted = 0;
+					rmdir(pnode->mntpoint);
+					continue;
+				}else{
+					DISKCK_DBG("Mount %s Successful, Update Partition Capatibty\n",devbuf);
+					update_partition_capacity_rw(pnode);
+				}
 			}
 			/*update dev used capacity*/
 			node->info.used += pnode->info.used;

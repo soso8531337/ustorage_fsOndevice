@@ -364,7 +364,8 @@ int32_t usDecode_ListHandle(usPhoneinfo *phoneDev, struct uStorPro_fsOnDev *proH
 	if(stat(filename, &st)!= 0 || !S_ISDIR(st.st_mode) ||
 			opendir(filename) == NULL){
 		DEBUG("%s is Not Dir\n", filename);
-		proHeader->relag =1;
+		proHeader->relag =USTOR_EERR;
+		proHeader->len = 0;		
 		return usProtocol_SendPackage(phoneDev, (void*)proHeader, PRO_HDR_SZIE);
 	}
 	
@@ -376,4 +377,51 @@ int32_t usDecode_ListHandle(usPhoneinfo *phoneDev, struct uStorPro_fsOnDev *proH
 
 	DEBUG("Buffer:%p Length:%d--List ----->%s\n", listcall.buffer, listcall.size, filename);
 	return usDisk_diskList(filename, readDirInvoke, (void*)&listcall);	
+}
+
+int32_t usDecode_GetFileInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *FilePtr, uint32_t payLen)
+{
+	char filename[MAX_PATH_SIZE] = {0};
+	struct stat st;
+	struct fileinfo *fileInfo;
+	char *ptrFlag;
+
+	
+	memcpy(filename, FilePtr, MAX_PATH_SIZE);
+	memset(&st, 0, sizeof(struct stat));
+	if(stat(filename, &st)!= 0 || S_ISDIR(st.st_mode)){
+		DEBUG("%s is Not A Normal File\n", filename);
+		proHeader->relag =USTOR_EERR;		
+		proHeader->len = 0;
+		return EUSTOR_ARG;
+	}
+	
+	fileInfo = (struct fileinfo *)FilePtr;
+	ptrFlag = strrchr(filename, '/');
+	if(ptrFlag == NULL){
+		strcpy(fileInfo->name, filename);
+	}else{
+		strcpy(fileInfo->name, ptrFlag+1);
+	}
+	fileInfo->actime =st.st_atime;
+	fileInfo->modtime = st.st_mtime;
+	fileInfo->isdir = 0;
+	fileInfo->size = st.st_size;
+
+	proHeader->len = sizeof(struct fileinfo);
+
+	DEBUG("Buffer:%p Length:%d--GetFIle Info OK ----->%s\n",  FilePtr, proHeader->len,filename);
+	return EUSTOR_OK;	
+}
+
+
+int32_t usDecode_GetFirmwareInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *FrimwarePtr, uint32_t payLen)
+{
+	if(usFirmware_GetInfo(FrimwarePtr, payLen, &(proHeader->len)) != EUSTOR_OK){
+		DEBUG("Get Firmware Informare Failed\n"); 	
+		proHeader->relag = USTOR_EERR;			
+		proHeader->len = 0;
+	}
+
+	return EUSTOR_OK;
 }

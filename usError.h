@@ -43,7 +43,9 @@ extern "C" {
 	#define EUSTOR_PRO_PACKAGE	20173009
 	#define EUSTOR_PRO_REFUSE	20173010	/*connection refuse just for ios*/
 
-
+	/*ustorage firmware releative error from 201704000*/
+	#define EUSTOR_FIRM_ARG 	20174001
+	
 #ifdef __cplusplus
 }
 #endif

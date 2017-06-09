@@ -285,9 +285,13 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 		usDecode_DiskLunHandle(proHeader, payload, buffsize-headLen);		
 		sndSize = headLen+proHeader->len;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_FIRMWARE_INFO){
-
+		usDecode_GetFirmwareInfoHandle(proHeader, payload, buffsize-headLen);
+		sndSize = headLen+proHeader->len;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_SAFEREMOVE){
 
+	}else if(proHeader->ctrid == USTOR_FSONDEV_FILE_INFO){
+		usDecode_GetFileInfoHandle(proHeader, payload, buffsize-headLen);		
+		sndSize = headLen+proHeader->len;
 	}else{
 		proHeader->len = 0;
 		proHeader->relag = USTOR_EERR;		
@@ -370,7 +374,7 @@ int main(int argc, char **argv)
 				DEBUG("Detect Phone Change to ING\n");
 			}else{
 				DEBUG("Detect Phone Failed.\n");
-				usleep(200000);
+				usleep(500000);
 				continue;
 			}	
 		}

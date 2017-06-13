@@ -292,6 +292,12 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 	}else if(proHeader->ctrid == USTOR_FSONDEV_FILE_INFO){
 		usDecode_GetFileInfoHandle(proHeader, payload, buffsize-headLen);		
 		sndSize = headLen+proHeader->len;
+	}else if(proHeader->ctrid == USTOR_FSONDEV_SYNC_TIME){
+		usDecode_SyncSystemTimeHandle(proHeader, payload, paylength-headLen);
+		sndSize = headLen+proHeader->len;
+	}else if(proHeader->ctrid == USTOR_FSONDEV_SYNC_WRITE){
+		usDecode_SyncCacheHandle(proHeader, payload, paylength-headLen);		
+		sndSize = headLen+proHeader->len;
 	}else{
 		proHeader->len = 0;
 		proHeader->relag = USTOR_EERR;		

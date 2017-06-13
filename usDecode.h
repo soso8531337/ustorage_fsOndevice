@@ -32,6 +32,8 @@ int32_t usDecode_DiskInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *Dis
 int32_t usDecode_GetFileInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *FilePtr, uint32_t payLen);
 
 int32_t usDecode_GetFirmwareInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *FrimwarePtr, uint32_t payLen);
+int32_t usDecode_SyncCacheHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *payLoad, uint32_t payLen);
+int32_t usDecode_SyncSystemTimeHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *payLoad, uint32_t payLen);
 
 
 

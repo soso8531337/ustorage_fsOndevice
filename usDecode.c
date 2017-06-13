@@ -389,7 +389,7 @@ int32_t usDecode_GetFileInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *
 	
 	memcpy(filename, FilePtr, MAX_PATH_SIZE);
 	memset(&st, 0, sizeof(struct stat));
-	if(stat(filename, &st)!= 0 || S_ISDIR(st.st_mode)){
+	if(stat(filename, &st)!= 0){
 		DEBUG("%s is Not A Normal File\n", filename);
 		proHeader->relag =USTOR_EERR;		
 		proHeader->len = 0;
@@ -405,9 +405,13 @@ int32_t usDecode_GetFileInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *
 	}
 	fileInfo->actime =st.st_atime;
 	fileInfo->modtime = st.st_mtime;
-	fileInfo->isdir = 0;
-	fileInfo->size = st.st_size;
-
+	if(S_ISDIR(st.st_mode)){
+		fileInfo->isdir = 1;
+		fileInfo->size = 0;
+	}else{
+		fileInfo->isdir = 0;
+		fileInfo->size = st.st_size;
+	}
 	proHeader->len = sizeof(struct fileinfo);
 
 	DEBUG("Buffer:%p Length:%d--GetFIle Info OK ----->%s\n",  FilePtr, proHeader->len,filename);
@@ -423,5 +427,35 @@ int32_t usDecode_GetFirmwareInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8
 		proHeader->len = 0;
 	}
 
+	return EUSTOR_OK;
+}
+
+int32_t usDecode_SyncSystemTimeHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *payLoad, uint32_t payLen)
+{
+	struct timeval tval;
+
+	proHeader->len = 0;
+	if(payLen != sizeof(int32_t)){
+		DEBUG("Sync System Time Payload invaild[%d]\n", payLen); 	
+		proHeader->relag = USTOR_EERR;			
+		return EUSTOR_ARG;
+	}
+	/*payload is int32_t*/
+	tval.tv_sec = *((int32_t *)payLoad);
+	tval.tv_usec = 0;
+	DEBUG("Set System Time To %ld\n", tval.tv_sec);
+	if(settimeofday(&tval, NULL)){
+		DEBUG("Set Sync System Time [%lds] Failed:%s\n", tval.tv_sec, strerror(errno)); 	
+		proHeader->relag = USTOR_EERR;			
+		return EUSTOR_SYS;
+	}
+
+	return EUSTOR_OK;
+}
+
+int32_t usDecode_SyncCacheHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *payLoad, uint32_t payLen)
+{
+	sync();
+	proHeader->len = 0;
 	return EUSTOR_OK;
 }

@@ -10,7 +10,7 @@ extern "C" {
 	/*ustorage base error from 20170000*/
 	#define EUSTOR_ARG			20170001
 	#define EUSTOR_MEM			20170002
-	
+	#define EUSTOR_SYS			20170003
 
 	/*ustorage usb releative error from 20171000*/
 	#define EUSTOR_USB_INIT		20171001

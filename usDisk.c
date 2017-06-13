@@ -164,7 +164,7 @@ int32_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE],
 		DEBUG("Argument Error\n");
 		return EUSTOR_ARG;
 	}
-	fd = open(filename, O_CREAT| O_RDWR, 0755);
+	fd = open(filename, O_RDWR, 0755);
 	if(fd < 0){
 		DEBUG("Open %s Error:%s\n", filename, strerror(errno));
 		return EUSTOR_DISK_OPEN;
@@ -274,7 +274,9 @@ int32_t usDisk_diskList(char *dirname, readDirCallBack dirCallback, void *arg)
 
 	ent = readdir(dir);
 	while(ent){
-		if (*(ent->d_name) != '.') {
+		/*Just ignore . and .. directory*/
+		if(strcmp(ent->d_name, ".") && strcmp(ent->d_name, "..")){
+	//	if (*(ent->d_name) != '.') {
 			
 			memset(backfile, 0, MAX_PATH_SIZE); 			
 			snprintf(backfile, MAX_PATH_SIZE-1, "%s/%s", dirname, ent->d_name);			

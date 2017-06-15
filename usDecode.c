@@ -357,12 +357,12 @@ int32_t usDecode_ListHandle(usPhoneinfo *phoneDev, struct uStorPro_fsOnDev *proH
 	struct listCallback listcall;
 	char filename[MAX_PATH_SIZE] = {0};
 	struct stat st;
+	int ret;
 
 	
 	memcpy(filename, listPtr, MAX_PATH_SIZE);
 	memset(&st, 0, sizeof(struct stat));
-	if(stat(filename, &st)!= 0 || !S_ISDIR(st.st_mode) ||
-			opendir(filename) == NULL){
+	if(stat(filename, &st)!= 0 || !S_ISDIR(st.st_mode)){
 		DEBUG("%s is Not Dir\n", filename);
 		proHeader->relag =USTOR_EERR;
 		proHeader->len = 0;		
@@ -376,7 +376,15 @@ int32_t usDecode_ListHandle(usPhoneinfo *phoneDev, struct uStorPro_fsOnDev *proH
 	listcall.phoneDev= (void*)phoneDev;
 
 	DEBUG("Buffer:%p Length:%d--List ----->%s\n", listcall.buffer, listcall.size, filename);
-	return usDisk_diskList(filename, readDirInvoke, (void*)&listcall);	
+	ret = usDisk_diskList(filename, readDirInvoke, (void*)&listcall);
+	if(ret == EUSTOR_DISK_LIST){
+		DEBUG("OpenDir Failed, Notify to peer[%s]\n", filename);
+		proHeader->relag =USTOR_EERR;
+		proHeader->len = 0;		
+		return usProtocol_SendPackage(phoneDev, (void*)proHeader, PRO_HDR_SZIE);
+	}
+
+	return EUSTOR_OK;
 }
 
 int32_t usDecode_GetFileInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *FilePtr, uint32_t payLen)

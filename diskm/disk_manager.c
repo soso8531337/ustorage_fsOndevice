@@ -1253,6 +1253,7 @@ int disk_mnt2_confirm_partition_info(disk_info_t *pdisk, char *spedev)
 
 			/*add node*/
 			list_add_tail(&newnode->node, &node->partlist);
+			node->partnum = 1;
 			if(spedev){				
 				DISKCK_DBG("Special Confirm %s Handle Finish[Only have main]\n", spedev);			
 				return DISK_SUCCESS;

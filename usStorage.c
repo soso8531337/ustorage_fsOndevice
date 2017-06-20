@@ -287,6 +287,11 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 	}else if(proHeader->ctrid == USTOR_FSONDEV_FIRMWARE_INFO){
 		usDecode_GetFirmwareInfoHandle(proHeader, payload, buffsize-headLen);
 		sndSize = headLen+proHeader->len;
+	}else if(proHeader->ctrid == USTOR_FSONDEV_UPDATE_START ||
+			proHeader->ctrid == USTOR_FSONDEV_UPDATE_DATA ||
+				proHeader->ctrid == USTOR_FSONDEV_UPDATE_END){
+		usDecode_UpgradeFirmwareHandle(proHeader, payload, paylength-headLen);		
+		sndSize = headLen+proHeader->len;
 	}else if(proHeader->ctrid == USTOR_FSONDEV_SAFEREMOVE){
 
 	}else if(proHeader->ctrid == USTOR_FSONDEV_FILE_INFO){

@@ -164,9 +164,15 @@ int32_t usDecode_DeleteHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *delPt
 		struct operation_newdel *deleteInfo = (struct operation_newdel*)delPtr;
 
 		DEBUG("Delete Operation:[%s]%s\n", deleteInfo->isdir?"Dir":"File", deleteInfo->abspath);
-		if(remove(deleteInfo->abspath)){
+		
+		if(deleteInfo->isdir == 0 && remove(deleteInfo->abspath)){
 			DEBUG("Remove %s Failed:%s\n", deleteInfo->abspath, strerror(errno));		
 			proHeader->relag = USTOR_EERR;
+		}else{
+			char cmdbuf[4096] = {0};
+			DEBUG("Direct Invoke RE command to delete direcotry\n");
+			snprintf(cmdbuf, 4095, "rm -rf \"%s\"", deleteInfo->abspath);
+			system(cmdbuf);
 		}
 		
 		proHeader->len = 0;
@@ -427,10 +433,21 @@ int32_t usDecode_GetFileInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *
 }
 
 
-int32_t usDecode_GetFirmwareInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *FrimwarePtr, uint32_t payLen)
+int32_t usDecode_GetFirmwareInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *frimwarePtr, uint32_t payLen)
 {
-	if(usFirmware_GetInfo(FrimwarePtr, payLen, &(proHeader->len)) != EUSTOR_OK){
+	if(usFirmware_GetInfo(frimwarePtr, payLen, &(proHeader->len)) != EUSTOR_OK){
 		DEBUG("Get Firmware Informare Failed\n"); 	
+		proHeader->relag = USTOR_EERR;			
+		proHeader->len = 0;
+	}
+
+	return EUSTOR_OK;
+}
+
+int32_t usDecode_UpgradeFirmwareHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *frimwarePtr, uint32_t payLen)
+{
+	if(usFirmware_FirmwareUP(frimwarePtr, payLen, proHeader->ctrid) != EUSTOR_OK){
+		DEBUG("Upgrade Firmware Failed\n"); 	
 		proHeader->relag = USTOR_EERR;			
 		proHeader->len = 0;
 	}

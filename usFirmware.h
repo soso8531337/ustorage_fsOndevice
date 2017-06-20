@@ -12,6 +12,7 @@ extern "C" {
 
 
 int32_t usFirmware_GetInfo(void *buff, int32_t size, int32_t *used);
+int usFirmware_FirmwareUP(void *buff, int32_t paySize, int32_t ctrid);
 
 
 

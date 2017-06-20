@@ -34,6 +34,7 @@ int32_t usDecode_GetFileInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *
 int32_t usDecode_GetFirmwareInfoHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *FrimwarePtr, uint32_t payLen);
 int32_t usDecode_SyncCacheHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *payLoad, uint32_t payLen);
 int32_t usDecode_SyncSystemTimeHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *payLoad, uint32_t payLen);
+int32_t usDecode_UpgradeFirmwareHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *frimwarePtr, uint32_t payLen);
 
 
 

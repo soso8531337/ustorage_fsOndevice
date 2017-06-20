@@ -46,6 +46,7 @@
 #define MD5_FLAG			"MD5="
 #define SYS_FIRM_SKIP		(64*1024) //skip 64KB
 #define SYS_FIRM_UPSCRIP		"/sbin/sysupgrade"
+#define SYS_UPGRADE_LED_BEGIN			"pioctl fan 2"
 
 typedef struct
 {
@@ -547,3 +548,46 @@ int32_t usFirmware_GetInfo(void *buff, int32_t size, int32_t *used)
 	
 	return EUSTOR_OK;
 }
+
+int usFirmware_FirmwareUP(void *buff, int32_t paySize, int32_t ctrid)
+{
+	static int fd = -1;
+
+	if(ctrid == USTOR_FSONDEV_UPDATE_START){
+		DEBUG("Prepare To update Firmware\r\n");
+		system(SYS_UPGRADE_LED_BEGIN);
+		close(fd);
+		fd = open(USTORAGE_UPPATH, 
+					O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR);
+		if(fd < 0){
+			DEBUG("Open %s Failed:%s\r\n", 
+					USTORAGE_UPPATH, strerror(errno));
+			return EUSTOR_FIRM_ERR;
+		}else{
+			DEBUG("Open %s Successful:%d", USTORAGE_UPPATH, fd);
+		}
+	}else if(ctrid == USTOR_FSONDEV_UPDATE_DATA){
+		if(!buff || !paySize || fd < 0){			
+			DEBUG("Parameter Wrong\r\n");
+			return EUSTOR_FIRM_ARG;
+		}	
+		DEBUG("Write %uBytes to Firmware\r\n", paySize);
+		if(writeFirmware(fd, (uint8_t *)buff, paySize) < 0){
+			return EUSTOR_FIRM_ERR;
+		}
+	}else if(ctrid == USTOR_FSONDEV_UPDATE_END){
+		close(fd);
+		fd = -1;
+		DEBUG("Check %s MD5\r\n", USTORAGE_UPPATH);
+		if(upgradeFirmware(USTORAGE_UPPATH) < 0){
+			DEBUG("upgradeFirmware %s Error\r\n", USTORAGE_UPPATH);			
+			return EUSTOR_FIRM_CRC;
+		}
+	}else{
+		DEBUG("unknown Comannd ID:%d\r\n", ctrid);
+		return EUSTOR_FIRM_ARG;
+	}
+
+	return EUSTOR_OK;
+}
+

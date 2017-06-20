@@ -45,6 +45,8 @@ extern "C" {
 
 	/*ustorage firmware releative error from 201704000*/
 	#define EUSTOR_FIRM_ARG 	20174001
+	#define EUSTOR_FIRM_ERR		20174002
+	#define EUSTOR_FIRM_CRC		20174003
 	
 #ifdef __cplusplus
 }

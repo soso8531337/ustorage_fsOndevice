@@ -98,6 +98,7 @@ typedef enum{
 
 
 #define PACKAGE_TIMEOUT		5000			/*send or receive package timeout*/
+#define PACKAGE_TIMEOUT_SND		3000			/*send or receive package timeout*/
 
 #ifndef IPPROTO_TCP
 #define IPPROTO_TCP 		6
@@ -231,7 +232,7 @@ static int32_t itunes_InterMemSendPacket(mux_itunes *iosDev, enum mux_protocol p
 		memcpy(iosDev->interBuf+ mux_header_size + hdrlen, data, length);
 	
 	if((res = usUsb_BlukPacketSend(&(iosDev->usbIOS), iosDev->interBuf, 
-						total, &trueSend, 0)) != EUSTOR_OK){
+						total, &trueSend, PACKAGE_TIMEOUT_SND)) != EUSTOR_OK){
 		DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
 							total, trueSend, res);
 		return res;
@@ -239,7 +240,7 @@ static int32_t itunes_InterMemSendPacket(mux_itunes *iosDev, enum mux_protocol p
 	if(total % 512 == 0){
 		DEBUG("Send ZLP.....\n");
 		 usUsb_BlukPacketSend(&(iosDev->usbIOS), iosDev->interBuf, 
-						0, NULL, 0);
+						0, NULL, PACKAGE_TIMEOUT_SND);
 	}
 	
 	DEBUG("sending packet ok(len %d) to device: successful\r\n", total);
@@ -320,7 +321,7 @@ static int32_t itunes_SendPacket(mux_itunes *iosDev, enum mux_protocol proto,
 	}else{
 		DEBUG("We Need to Send IOS Header First\n");
 		if((res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-							total, &trueSend, 0)) != EUSTOR_OK){
+							total, &trueSend, PACKAGE_TIMEOUT_SND)) != EUSTOR_OK){
 			DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
 								mux_header_size + hdrlen, trueSend, res);
 			return res;
@@ -330,7 +331,7 @@ static int32_t itunes_SendPacket(mux_itunes *iosDev, enum mux_protocol proto,
 	}
 	
 	if(total && (res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-						total, &trueSend, 0)) != EUSTOR_OK){
+						total, &trueSend, PACKAGE_TIMEOUT_SND)) != EUSTOR_OK){
 		DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
 							total, trueSend, res);
 		return res;
@@ -338,7 +339,7 @@ static int32_t itunes_SendPacket(mux_itunes *iosDev, enum mux_protocol proto,
 	if(total && total % 512 == 0){
 		DEBUG("Send ZLP.....\n");
 		 usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-						0, NULL, 0);
+						0, NULL, PACKAGE_TIMEOUT_SND);
 	}
 	
 	DEBUG("sending packet ok(len %d) to device: successful\r\n", total);
@@ -411,7 +412,7 @@ static int32_t itunes_SendTCP(mux_itunes *iosDev, uint8_t flags,
 	}else{
 		DEBUG("We Need to Send IOS Header First\n");
 		if((res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-							total, &trueSend, 0)) != EUSTOR_OK){
+							total, &trueSend, PACKAGE_TIMEOUT_SND)) != EUSTOR_OK){
 			DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
 								mux_header_size + hdrlen, trueSend, res);
 			return res;
@@ -421,7 +422,7 @@ static int32_t itunes_SendTCP(mux_itunes *iosDev, uint8_t flags,
 	}
 	
 	if(total && (res = usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-						total, &trueSend, 0)) != EUSTOR_OK){
+						total, &trueSend, PACKAGE_TIMEOUT_SND)) != EUSTOR_OK){
 		DEBUG("usb_send failed while sending packet (len %d-->%d) to device: %d\r\n", 
 							total, trueSend, res);
 		return res;
@@ -430,7 +431,7 @@ static int32_t itunes_SendTCP(mux_itunes *iosDev, uint8_t flags,
 	if(total && total % 512 == 0){
 		DEBUG("Send ZLP.....\n");
 		 usUsb_BlukPacketSend(&(iosDev->usbIOS), ptrpay, 
-						0, NULL, 0);
+						0, NULL, PACKAGE_TIMEOUT_SND);
 	}
 	
 	DEBUG("sending packet ok(len %d) to device: successful\r\n", total);
@@ -660,7 +661,7 @@ static int32_t aoa_SendProPackage(usbInfo *aoaDev, void *buffer, uint32_t size)
 			sndSize = freeSize;
 		}
 		if((rc = usUsb_BlukPacketSend(aoaDev, curBuf+already, 
-						sndSize, &actual_length, 0)) != EUSTOR_OK){
+						sndSize, &actual_length, PACKAGE_TIMEOUT_SND)) != EUSTOR_OK){
 			DEBUG("usUsb_BlukPacketSend Error[%d]:%p sndSize:%d already:%d\r\n", 
 						rc, buffer, sndSize, already);		
 			return rc;

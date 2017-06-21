@@ -364,7 +364,7 @@ int32_t usDecode_ListHandle(usPhoneinfo *phoneDev, struct uStorPro_fsOnDev *proH
 	char filename[MAX_PATH_SIZE] = {0};
 	struct stat st;
 	int ret;
-
+#define LIST_MAX_BUFFER		(64*1024)
 	
 	memcpy(filename, listPtr, MAX_PATH_SIZE);
 	memset(&st, 0, sizeof(struct stat));
@@ -376,7 +376,7 @@ int32_t usDecode_ListHandle(usPhoneinfo *phoneDev, struct uStorPro_fsOnDev *proH
 	}
 	
 	listcall.buffer = listPtr;
-	listcall.size = ptrLen;
+	listcall.size = (ptrLen > LIST_MAX_BUFFER?LIST_MAX_BUFFER:ptrLen);
 	listcall.usedsize = 0;
 	listcall.proHeader = (void*)proHeader;
 	listcall.phoneDev= (void*)phoneDev;

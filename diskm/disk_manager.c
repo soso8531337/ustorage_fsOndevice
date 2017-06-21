@@ -2126,7 +2126,6 @@ int disk_getdisk_info(void *buff, int size, int *used)
 			diskNode->type = 0;
 			diskNode->enablePlug = 0;
 		}
-		diskNode->partNum = node->partnum;
 
 		int i = 0;
 		node->info.used = 0;
@@ -2161,9 +2160,10 @@ int disk_getdisk_info(void *buff, int size, int *used)
 			}
 			DISKCK_DBG("Found Partition:%s fstype=%d\n",
 					diskNode->partitions[i].dev, diskNode->partitions[i].fstype);
-			i++;
+			i++;			
 		}
 		
+		diskNode->partNum = i;
 		diskNode->usedSize = node->info.used;
 		diskPtr->disknum++;
 		totalSize -= sizeof(struct diskInfoNode);

@@ -33,10 +33,10 @@ int32_t usDisk_init(void);
 int32_t usDisk_getNotifyInfo(struct nofiyStruct *notify);
 void usDisk_PlugCallBack(int action, char *dev);
 int32_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE], 
-						void *buff, int64_t offset, int32_t size);
+						void *buff, int64_t offset, int32_t size, int32_t *trueRead);
 
 int32_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE], 
-						void *buff, int64_t offset, int32_t size);
+						void *buff, int64_t offset, int32_t size, int32_t *trueWrite);
 
 int32_t usDisk_diskCreate(char abspath[MAX_FILENAME_SIZE], 
 						int8_t isdir, int32_t actime, int32_t modtime);

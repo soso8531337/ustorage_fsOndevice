@@ -64,18 +64,18 @@ int32_t usDecode_ReadHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *readHea
 		struct operation_rw *readInfo = (struct operation_rw *)readHeader;		
 		char abspath[4096] = {0};
 		int64_t offset= readInfo->offset;
-		int32_t size = readInfo->size;
+		int32_t size = readInfo->size, trueRead = 0;
 		int16_t pathlen = readInfo->pathlen;
 		strncpy(abspath, readInfo->abspath, pathlen);
 
 		DEBUG("Read Operation:\nName:%s\nSize:%d\nOffset:%lld\n", abspath, size, offset);
 		
 		if(buffSize >= size&&
-				usDisk_diskRead(abspath, readHeader, offset, size) == EUSTOR_OK){
-			proHeader->len = size;
+				usDisk_diskRead(abspath, readHeader, offset, size, &trueRead) == EUSTOR_OK){
+			proHeader->len = trueRead;
 		}else{
 		
-			DEBUG("Read Operation Error:\nName:%s\nSize:%d\nOffset:%ld\n", abspath, size, offset);
+			DEBUG("Read Operation Error:\nName:%s\nSize:%d\nOffset:%ld\n", abspath, trueRead, offset);
 			proHeader->len = 0;
 			proHeader->relag = USTOR_EERR;
 		}
@@ -106,7 +106,7 @@ int32_t usDecode_WriteHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *writeH
 		DEBUG("Write Operation:\nName:%s\nSize:%d\nOffset:%lld\n", abspath, size, offset);
 		
 		if(usDisk_diskWrite(abspath, writeHeader+sizeof(struct operation_rw)+pathlen, 
-							offset, size) == EUSTOR_OK){
+							offset, size, NULL) == EUSTOR_OK){
 			proHeader->len = 0;
 		}else{
 		
@@ -306,13 +306,8 @@ int32_t readDirInvoke(void *arg, char *filename, int flag)
 	struct stat st;
 	memset(&st, 0, sizeof(struct stat));
 	if(stat(filename, &st)!= 0){
-		DEBUG("Stat %s Failed:%s\n", filename, strerror(errno));
-		struct uStorPro_fsOnDev *proHdr= (struct uStorPro_fsOnDev *)listInvoke->proHeader;
-		
-		proHdr->relag =1;
-		proHeader->len = 0;
-		return usProtocol_SendPackage((usPhoneinfo *)(listInvoke->phoneDev), 
-				listInvoke->proHeader, PRO_HDR_SZIE);
+		DEBUG("Stat %s Failed[BUT We Think it Successful, Ignore This File]:%s\n", filename, strerror(errno));
+		return EUSTOR_OK;
 	}
 	
 	if(listInvoke->usedsize == 0){

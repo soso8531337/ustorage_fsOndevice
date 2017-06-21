@@ -109,7 +109,7 @@ void usDisk_PlugCallBack(int action, char *dev)
 }
 
 int32_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE], 
-						void *buff, int64_t offset, int32_t size)
+						void *buff, int64_t offset, int32_t size, int32_t *trueRead)
 {
 	int fd;
 	int32_t already = 0, res;
@@ -144,18 +144,27 @@ int32_t usDisk_diskRead(char filename[MAX_FILENAME_SIZE],
 			DEBUG("Read End OF File: %s Error:%s[already=%d total=%d]\r\n", 
 					filename, strerror(errno), already, size);
 			close(fd);
-			return EUSTOR_DISK_READ;		
+			if(trueRead){
+				DEBUG("May Be Not check End, Successful\n");
+				*trueRead = already;
+				return EUSTOR_OK;
+			}else{
+				return EUSTOR_DISK_READ;
+			}
 		}
 		already += res;
 	} while (already < size);
 	close(fd);
 
+	if(trueRead){
+		*trueRead = size;
+	}
 	return EUSTOR_OK;
 
 }
 
 int32_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE], 
-						void *buff, int64_t offset, int32_t size)
+						void *buff, int64_t offset, int32_t size, int32_t *trueWrite)
 {
 	int fd;
 	int already = 0, res;
@@ -183,14 +192,22 @@ int32_t usDisk_diskWrite(char filename[MAX_FILENAME_SIZE],
 					errno ==  EAGAIN){
 				continue;
 			}
-			DEBUG("Read %s Error:%s\r\n", filename, strerror(errno));
+			DEBUG("Write %s Error:%s\r\n", filename, strerror(errno));
 			close(fd);
-			return EUSTOR_DISK_WRITE;		
+			if(trueWrite){				
+				DEBUG("Write %s Error:%s-->But we think is ok\r\n", filename, strerror(errno));
+				*trueWrite = already;
+				return EUSTOR_OK;
+			}else{
+				return EUSTOR_DISK_WRITE;		
+			}
 		}
 		already += res;
 	} while (already < size);
 	close(fd);
-
+	if(trueWrite){	
+		*trueWrite = size;
+	}
 	return EUSTOR_OK;
 }
 

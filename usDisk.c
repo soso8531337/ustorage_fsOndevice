@@ -298,7 +298,8 @@ int32_t usDisk_diskList(char *dirname, readDirCallBack dirCallback, void *arg)
 			memset(backfile, 0, MAX_PATH_SIZE); 			
 			snprintf(backfile, MAX_PATH_SIZE-1, "%s/%s", dirname, ent->d_name);			
 			DEBUG("List File:%s\n", backfile);
-			if((res = dirCallback(arg, backfile, 0)) != EUSTOR_OK){
+			if((res = dirCallback(arg, backfile, 0)) != EUSTOR_OK){				
+				closedir(dir);
 				return res;
 			}			
 		}

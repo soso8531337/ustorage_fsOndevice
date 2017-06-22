@@ -359,7 +359,7 @@ int32_t usDecode_ListHandle(usPhoneinfo *phoneDev, struct uStorPro_fsOnDev *proH
 	char filename[MAX_PATH_SIZE] = {0};
 	struct stat st;
 	int ret;
-#define LIST_MAX_BUFFER		(64*1024)
+#define LIST_MAX_BUFFER		(256*1024)
 	
 	memcpy(filename, listPtr, MAX_PATH_SIZE);
 	memset(&st, 0, sizeof(struct stat));

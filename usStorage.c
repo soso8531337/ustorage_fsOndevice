@@ -243,18 +243,16 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 	proHeader = (struct uStorPro_fsOnDev *)buffer;
 
 	if(proHeader->head == PRO_BASIC_MAGIC){
-		struct uStorPro_headInfo baseHeader;
+		struct uStorPro_headInfo *baseHeader = (struct uStorPro_headInfo *)buffer;
 		
-		memcpy(&baseHeader, buffer, PRO_HDR_SZIE);
-		baseHeader.relag = 0;
-		usDecode_BasicMagicHandle(&baseHeader);		
-		return usProtocol_SendPackage(phoneDev, (void*)&baseHeader, PRO_HDR_SZIE);
+		baseHeader->relag = 0;
+		usDecode_BasicMagicHandle(baseHeader);		
+		return usProtocol_SendPackage(phoneDev, (void*)baseHeader, PRO_HDR_SZIE);
 	}else if(proHeader->head == SCSI_PHONE_MAGIC){
-		struct scsi_head ver1Header;
+		struct scsi_head *ver1Header = (struct scsi_head *)buffer;
 
-		memcpy(&ver1Header, buffer, PRO_HDR_SZIE);
-		ver1Header.relag = 1;
-		return usProtocol_SendPackage(phoneDev, (void*)&ver1Header, PRO_HDR_SZIE);
+		ver1Header->relag = 1;
+		return usProtocol_SendPackage(phoneDev, (void*)ver1Header, PRO_HDR_SZIE);
 	}
 	payload = buffer+headLen;
 	if(proHeader->ctrid == USTOR_FSONDEV_READ){
@@ -315,8 +313,9 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 void usStorage_notifyPlug(usPhoneinfo *phoneDev)
 {
 	struct nofiyStruct event;
-	struct uStorPro_fsOnDev proHeader;
+	struct uStorPro_fsOnDev *proHeader;
 	static int32_t dwtag = 0;
+	uint8_t tmpbuf[1024];
 
 	if(!phoneDev){
 		return;
@@ -326,17 +325,19 @@ void usStorage_notifyPlug(usPhoneinfo *phoneDev)
 	if(event.valid == 0){
 		return ;
 	}
-	memset(&proHeader, 0, sizeof(struct uStorPro_fsOnDev));
-	proHeader.head = PRO_REVER_MAGIC;
-	proHeader.version = 1;
-	proHeader.relag = 0;
-	proHeader.wtag = dwtag++;
-	proHeader.ctrid = USTOR_FSONDEV_DISKLUN;
-	proHeader.len = 0;
+
+	proHeader = (struct uStorPro_fsOnDev *)(tmpbuf+36);
+
+	proHeader->head = PRO_REVER_MAGIC;
+	proHeader->version = 1;
+	proHeader->relag = 0;
+	proHeader->wtag = dwtag++;
+	proHeader->ctrid = USTOR_FSONDEV_DISKLUN;
+	proHeader->len = 0;
 
 	DEBUG("Notify To Peer:%s-%s[Now:%ld Trigger:%d]\n",
 				event.dev, event.event == DISK_PLUGIN?"PlugIn":"PlugOut", time(NULL), event.invokTime);
-	usProtocol_SendPackage(phoneDev, (void*)&proHeader, sizeof(proHeader));
+	usProtocol_SendPackage(phoneDev, (void*)proHeader, sizeof(struct uStorPro_fsOnDev));
 }
 
 void phoneCallBack(int state)

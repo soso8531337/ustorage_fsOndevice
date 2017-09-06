@@ -2051,7 +2051,6 @@ int disk_aciton_func(udev_action *action)
 int disk_getdisk_lun(void *buff, int size, int *used)
 {
 	disk_maininfo_t *node, *_node;
-	int disknum = 0;
 	struct operation_diskLun *diskPtr = (struct operation_diskLun*)(buff);
 	int totalSize = size, nodeSize = sizeof(struct diskPlugNode);
 
@@ -2094,7 +2093,6 @@ int disk_getdisk_info(void *buff, int size, int *used)
 {
 	disk_maininfo_t *node, *_node;	
 	disk_partinfo_t *pnode, *_pnode;
-	int disknum = 0;
 	struct operation_diskInfo *diskPtr = (struct operation_diskInfo*)(buff);
 	int totalSize = size, nodeSize = sizeof(struct diskInfoNode);
 

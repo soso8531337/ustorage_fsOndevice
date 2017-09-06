@@ -52,6 +52,7 @@
 #include "usSys.h"
 #include "usEvent.h"
 #include "usError.h"
+#include "usDecode.h"
 
 /*512 used for ios header offset, 24 used protocol header, 256K used for payload, 4096 for path name, 128 for other sturct size*/
 #define US_RESERVED_SIZE	512
@@ -66,9 +67,9 @@ enum connect_state {
 
 struct usStor{
 	usPhoneinfo phone;
-	char usbuf[US_BUFFER_SIZE];
+	uint8_t usbuf[US_BUFFER_SIZE];
 	int32_t uspaylen;
-	char *uspayload;
+	uint8_t *uspayload;
 };
 
 struct usStor usContext;
@@ -232,7 +233,7 @@ static int32_t usStorage_ProtocolHandle(usPhoneinfo *phoneDev,
 									uint8_t *buffer, uint32_t buffsize, uint32_t paylength)
 {
 	struct uStorPro_fsOnDev *proHeader = NULL;
-	uint32_t usedSize, sndSize = 0;
+	uint32_t sndSize = 0;
 	uint32_t headLen = sizeof(struct uStorPro_fsOnDev);
 	uint8_t *payload = NULL;
 

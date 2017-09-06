@@ -158,11 +158,6 @@ static struct udevd_uevent_msg *get_msg_from_envbuf(const char *buf, int buf_siz
 
 static int32_t handleStoragePlug(struct udevd_uevent_msg *msg)
 {
-	int countTime = 0;
-	uint32_t sendCount=0;
-	uint8_t diskPlug;
-	uint8_t rc;
-	
 	if(!msg){
 		return -1;
 	}

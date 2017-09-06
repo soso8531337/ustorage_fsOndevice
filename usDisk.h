@@ -42,6 +42,10 @@ int32_t usDisk_diskCreate(char abspath[MAX_FILENAME_SIZE],
 						int8_t isdir, int32_t actime, int32_t modtime);
 
 int32_t usDisk_diskList(char *dirname, readDirCallBack dirCallback, void *arg);
+int32_t usDisk_diskLun(void *buff, int32_t size, int32_t *used);
+int32_t usDisk_diskInfo(void *buff, int32_t size, int32_t *used);
+
+
 
 #ifdef __cplusplus
 }

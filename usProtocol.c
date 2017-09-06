@@ -14,6 +14,8 @@
 #include <libusb-1.0/libusb.h>
 #include <sys/ioctl.h>
 #include <errno.h>
+#include <unistd.h>
+
 #include "usProtocol.h"
 #include "usUsb.h"
 #include "usSys.h"
@@ -451,7 +453,6 @@ static int32_t itunes_getIOSProVersion(mux_itunes *iosDev)
 	uint8_t cbuffer[512] = {0};
 	uint32_t trueRecv = 0;
 	int32_t res;
-	struct mux_header *itunesHeader = NULL;
 	
 	if(!iosDev){
 		return EUSTOR_ARG;
@@ -830,7 +831,7 @@ static int32_t itunes_RecvProPackage(mux_itunes *iosDev, uint8_t* buffer,
 	}
 
 	if(payload_length){
-		char ackbuf[512] = {0};
+		uint8_t ackbuf[512] = {0};
 		DEBUG("Send ACK[Package Finish ack:%u]\r\n", iosDev->tx_ack);
 		itunes_SendTCP(iosDev, TH_ACK, ackbuf, NULL, 0);
 		memcpy(buffer, payload, payload_length);

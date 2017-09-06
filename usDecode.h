@@ -20,11 +20,11 @@ extern "C" {
 #endif
 
 int32_t usDecode_BasicMagicHandle(struct uStorPro_headInfo *proHeader);
-int32_t usDecode_ReadHandle(uStorPro_fsOnDev *proHeader, uint8_t *readHeader, uint32_t buffSize);
-int32_t usDecode_WriteHandle(uStorPro_fsOnDev *proHeader, uint8_t *writeHeader, uint32_t payloadSize);
-int32_t usDecode_CreateHandle(uStorPro_fsOnDev *proHeader, uint8_t *creatPtr, uint32_t ptrLen);
-int32_t usDecode_DeleteHandle(uStorPro_fsOnDev *proHeader, uint8_t *delPtr, uint32_t ptrLen);
-int32_t usDecode_MoveHandle(uStorPro_fsOnDev *proHeader, uint8_t *MovPtr, uint32_t ptrLen);
+int32_t usDecode_ReadHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *readHeader, uint32_t buffSize);
+int32_t usDecode_WriteHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *writeHeader, uint32_t payloadSize);
+int32_t usDecode_CreateHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *creatPtr, uint32_t ptrLen);
+int32_t usDecode_DeleteHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *delPtr, uint32_t ptrLen);
+int32_t usDecode_MoveHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *MovPtr, uint32_t ptrLen);
 
 int32_t readDirInvoke(void *arg, char *filename, int flag);
 int32_t usDecode_DiskLunHandle(struct uStorPro_fsOnDev *proHeader, uint8_t *DiskPtr, uint32_t payLen);

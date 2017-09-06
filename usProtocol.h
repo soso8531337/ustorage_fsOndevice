@@ -77,6 +77,7 @@ int32_t usProtocol_PhoneDetect(usPhoneinfo *phone);
 void usProtocol_PhoneRelease(usPhoneinfo *phone);
 int32_t usProtocol_SendPackage(usPhoneinfo *phone, void *buffer, uint32_t size);
 int32_t usProtocol_RecvPackage(usPhoneinfo *phone, uint8_t *buffer, uint32_t tsize, uint32_t *rsize);
+int32_t usProtocol_ConnectPhone(usPhoneinfo *phone);
 
 #ifdef __cplusplus
 }

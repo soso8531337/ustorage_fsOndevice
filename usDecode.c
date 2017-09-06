@@ -31,13 +31,15 @@
 #include <linux/netlink.h>
 #include <sys/ioctl.h>
 #include <scsi/sg.h>
+#include <sys/time.h>
 
 #include "usError.h"
 #include "usUsb.h"
 #include "protocol.h"
 #include "usSys.h"
 #include "usProtocol.h"
-
+#include "usDisk.h"
+#include "usFirmware.h"
 
 int32_t usDecode_BasicMagicHandle(struct uStorPro_headInfo *proHeader)
 {

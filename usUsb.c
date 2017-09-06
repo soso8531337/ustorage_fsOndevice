@@ -72,8 +72,6 @@ int32_t usUsb_SendControlRequest(void *osPriv,
 
 int32_t usUsb_GetDeviceDescriptor(void *osPriv, USB_StdDesDevice_t *usbDeviceDescriptor)
 {
-	libusb_device_handle *dev_handle;
-
 	if(!usbDeviceDescriptor || !osPriv){
 		return EUSTOR_ARG;
 	}
@@ -142,7 +140,7 @@ int32_t usUsb_BlukPacketSend(usbInfo *usbDev, uint8_t *buffer,
 {
 	int32_t rc;
 	int transferred = 0;
-	uint32_t already = 0, sndlen;
+	uint32_t already = 0;
 	
 	if(!usbDev || !usbDev->osPriv){
 		return EUSTOR_ARG;

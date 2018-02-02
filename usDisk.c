@@ -37,8 +37,12 @@
 #include "usUsb.h"
 #include "usSys.h"
 #include "protocol.h"
-#include "disk_manager.h"
 #include "usError.h"
+#if USESYSTEM_DISKM == 1
+#include "diskipc.h"
+#else
+#include "disk_manager.h"
+#endif
 
 #define sys_offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
 

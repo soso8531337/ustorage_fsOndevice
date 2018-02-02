@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+#define USESYSTEM_DISKM		1
+
 extern void log_debug(FILE *fp, char *fname, const char *func, int lineno, char *fmt, ...);
 
 #define DEBUG(fmt, arg...)	do{log_debug(stderr, __FILE__, __FUNCTION__ ,  __LINE__, fmt, ##arg); } while (0)

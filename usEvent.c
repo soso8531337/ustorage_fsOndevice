@@ -24,6 +24,8 @@
 #include <sys/socket.h>
 #include <poll.h>
 #include <pthread.h>
+#include <sys/un.h>
+#include <signal.h>
 #include "usUsb.h"
 #include "usDisk.h"
 #include "usProtocol.h"
@@ -31,7 +33,7 @@
 #include "usEvent.h"
 #include "usError.h"
 
-#define PHONE_BUS_LOC           "usb1/1-1/1-1.2"
+#define PHONE_BUS_LOC           "usb1/1-1/1-1.1"
 #define DISK_BUS_LOC            "usb1/1-1/1-1.1"
 
 #define UEVENT_BUFFER_SIZE		2048
@@ -46,6 +48,7 @@
 #define STOR_STR_CHANGE		"change"
 #define PHONE_SUBSYS				"usb"
 #define PHONE_DEVTYPE			"usb_device"
+#define UPNPD_EVENT_IPC 	"/tmp/kinston.ipc"
 
 struct udevd_uevent_msg {
 	unsigned char id;
@@ -60,6 +63,13 @@ struct udevd_uevent_msg {
 	char *envp[UEVENT_NUM_ENVP+1];
 	char envbuf[];
 };
+
+typedef struct _eventBlock{
+	char action[32];
+	char type[32];
+	char	dev[32];
+	int partnum;	
+}eventBlock; //notify upnpd disk add or remove
 
 static struct usEventArg eventConf;
 
@@ -96,6 +106,83 @@ static int32_t initNetlinkSock(void)
 	close(dev_fd);
 	
 	return sockfd;
+}
+
+static void sig_hander(int signo)
+{
+	DEBUG("recv signal, signal number = %d\n", signo);
+}
+
+static int ipcServerInit(char *path)
+{
+	int len = 0, sock = 0;
+	sigset_t sig;
+	struct sockaddr_un addr;
+
+	if ((!path)){
+		return -1;
+	}
+
+	sock = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (sock < 0) {
+		DEBUG("create socket fail, errno:%d, %s\n", errno, strerror(errno));
+		return -1;
+	}
+
+	unlink(path);
+	memset(&addr, 0, sizeof(struct sockaddr_un));
+	addr.sun_family = AF_UNIX;
+	strncpy(addr.sun_path, path, sizeof(addr.sun_path)-1);
+	len = sizeof(addr.sun_family) + strlen(addr.sun_path);
+
+	if (bind(sock, (struct sockaddr *)&addr, len) < 0) {
+		DEBUG("bind socket fail, errno:%d, %s\n", errno, strerror(errno));
+		close(sock);
+		return -1;
+	}
+
+	if (listen(sock, 5) < 0) {
+		DEBUG("listen on socket fail, errno:%d, %s\n", errno, strerror(errno));
+		close(sock);
+		return -1;
+	}
+
+	sigemptyset(&sig);
+	sigaddset(&sig, SIGABRT);
+	sigaddset(&sig, SIGPIPE);
+	sigaddset(&sig, SIGQUIT);
+	sigaddset(&sig, SIGUSR1);
+	sigaddset(&sig, SIGUSR2);
+	sigprocmask(SIG_BLOCK, &sig, NULL);
+	signal(SIGBUS, sig_hander);
+	signal(SIGHUP, sig_hander);
+	signal(SIGILL, sig_hander);
+
+	DEBUG("ipc server success, path:%s, sock:%d\n", path, sock);
+
+	return sock;
+}
+
+static int ipcRead(int fd, char *buf, int len)
+{
+	int rlen = 0, ylen = 0, offset = 0;
+
+	if ((!buf) || (len <= 0)){
+		DEBUG("data err\n");
+		return -1;
+	}
+
+	rlen = len;
+	while ((ylen = read(fd, &buf[offset], rlen)) != rlen) {
+		if(ylen > 0) {
+			offset += ylen;
+			rlen -= ylen;
+		} else {
+			DEBUG("ylen:%d, errno:%d, err:%s\n", ylen, errno, strerror(errno));
+			return -1;
+		}
+	}
+	return 0;
 }
 
 static struct udevd_uevent_msg *get_msg_from_envbuf(const char *buf, int buf_size)
@@ -260,7 +347,7 @@ static int32_t handlePhonePlug(struct udevd_uevent_msg *msg)
 	return 0;
 }
 
-static int32_t handlePlug(int sockfd)
+static int handlePlug(int sockfd)
 {
 	char buffer[UEVENT_BUFFER_SIZE*2] = {0};
 	struct udevd_uevent_msg *msg;
@@ -309,7 +396,11 @@ static int32_t handlePlug(int sockfd)
 	}
 	if(!strcasecmp(msg->subsystem, STOR_SUBSYS) &&
 			!strcasecmp(msg->devtype, STOR_DEVTYPE)){
+	#if USESYSTEM_DISKM == 1
+		DEBUG("uStorage Not handle disk Plug..\n");
+	#else
 		handleStoragePlug(msg);
+	#endif
 	}else if(strstr(msg->devpath, PHONE_BUS_LOC) &&
 		!strcasecmp(msg->subsystem, PHONE_SUBSYS) &&
 				!strcasecmp(msg->devtype, PHONE_DEVTYPE)){
@@ -325,22 +416,63 @@ static int32_t handlePlug(int sockfd)
 	return 0;
 }
 
+static int handleIPC(int sockfd)
+{	
+	socklen_t len = 0;
+	struct sockaddr addr;
+	struct udevd_uevent_msg msg;
+	eventBlock evtMsg;
+	int clientfd;
+
+	memset(&msg, 0, sizeof(struct udevd_uevent_msg));
+	memset(&evtMsg, 0, sizeof(eventBlock));
+
+	clientfd = accept(sockfd, &addr, &len);
+	if(clientfd < 0) {
+		DEBUG("accept fail, sock:%d[%s]\n", sockfd, strerror(errno));
+		return -1;
+	}
+	
+	if(ipcRead(clientfd, (char*)&evtMsg, sizeof(eventBlock)) < 0){
+		DEBUG("ipcRead Failed\n");
+		close(clientfd);
+		return -1;
+	}	
+	close(clientfd);
+	msg.action = evtMsg.action;
+	msg.devname = evtMsg.type;
+
+	handleStoragePlug(&msg);
+
+	return 0;
+}
 
 void* vs_eventFunc(void *pvParameters)
 {
-	int plugSocket = 0, cnt;
-	struct pollfd fds;
+	int plugSocket = 0, ipcSocket = 0, cnt;
+	struct pollfd fds[2];
 	
 
 	while(1){
-		if(plugSocket <= 0 && 
-				(plugSocket = initNetlinkSock()) < 0){
+		if(plugSocket <= 0){
+			plugSocket = initNetlinkSock();
+		}
+		if(ipcSocket <= 0){
+			ipcSocket = ipcServerInit(UPNPD_EVENT_IPC);
+		}
+		if(plugSocket <=0 && ipcSocket <= 0){
 			usleep(200000);
 			continue;
 		}
-		fds.fd = plugSocket;
-		fds.events = POLLIN;
-		cnt = poll(&fds, 1, -1);
+		if(plugSocket > 0){
+			fds[0].fd = plugSocket;
+			fds[0].events = POLLIN;
+		}
+		if(ipcSocket > 0){
+			fds[1].fd = ipcSocket;
+			fds[1].events = POLLIN;
+		}
+		cnt = poll(fds, 2, -1);
 		if(cnt < 0){
 			if(cnt == -1 && errno == EINTR){
 				continue;
@@ -353,9 +485,13 @@ void* vs_eventFunc(void *pvParameters)
 			/*timeout*/
 			continue;
 		}
-		if(fds.revents & POLLIN){
+		if(plugSocket > 0 && fds[0].revents & POLLIN){
 			/*receive plug information*/
 			handlePlug(plugSocket);
+		}
+		if(ipcSocket > 0 && fds[1].revents & POLLIN){
+			/*receive ipc information*/
+			handleIPC(ipcSocket);
 		}
 	}
 
